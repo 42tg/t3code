@@ -116,7 +116,7 @@ function isKnownFlagToken(value: string): boolean {
   }
 
   for (const flag of KNOWN_CLI_FLAGS) {
-    if (!flag.startsWith("--") || flag === "--") {
+    if (flag === "--") {
       continue;
     }
     if (value.startsWith(`${flag}=`)) {
@@ -232,6 +232,11 @@ export function parseCliOptions(
 
     if (arg === "--open" || arg === "-o") {
       noOpen = false;
+      continue;
+    }
+
+    if (arg.startsWith("-o=")) {
+      noOpen = !parseBooleanCliValue(arg.split("=")[1] ?? "", "-o");
       continue;
     }
 

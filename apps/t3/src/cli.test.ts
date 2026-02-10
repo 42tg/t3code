@@ -92,6 +92,14 @@ describe("parseCliOptions", () => {
     expect(options.noOpen).toBe(false);
   });
 
+  it("supports equals-style -o boolean values", () => {
+    const enabled = parseCliOptions(["-o=true"], { T3_NO_OPEN: "true" }, "/workspace");
+    expect(enabled.noOpen).toBe(false);
+
+    const disabled = parseCliOptions(["-o=0"], { T3_NO_OPEN: "false" }, "/workspace");
+    expect(disabled.noOpen).toBe(true);
+  });
+
   it("supports explicit equals-style --open boolean overrides", () => {
     const options = parseCliOptions(
       ["--open=false"],
@@ -159,6 +167,12 @@ describe("parseCliOptions", () => {
   it("throws for invalid equals-style --open values", () => {
     expect(() => parseCliOptions(["--open=maybe"], {}, "/workspace")).toThrow(
       "Invalid value for --open",
+    );
+  });
+
+  it("throws for invalid equals-style -o values", () => {
+    expect(() => parseCliOptions(["-o=maybe"], {}, "/workspace")).toThrow(
+      "Invalid value for -o",
     );
   });
 
@@ -468,6 +482,12 @@ describe("parseCliOptions", () => {
     );
   });
 
+  it("treats -o=bool after --backend-port as missing value", () => {
+    expect(() => parseCliOptions(["--backend-port", "-o=true"], {}, "/workspace")).toThrow(
+      "Missing value for --backend-port",
+    );
+  });
+
   it("treats equals-style flag tokens after --backend-port as missing values", () => {
     expect(() =>
       parseCliOptions(["--backend-port", "--web-port=7000"], {}, "/workspace"),
@@ -641,6 +661,12 @@ describe("parseCliOptions", () => {
 
   it("treats -o after --cwd as missing value", () => {
     expect(() => parseCliOptions(["--cwd", "-o"], {}, "/workspace")).toThrow(
+      "Missing value for --cwd",
+    );
+  });
+
+  it("treats -o=bool after --cwd as missing value", () => {
+    expect(() => parseCliOptions(["--cwd", "-o=false"], {}, "/workspace")).toThrow(
       "Missing value for --cwd",
     );
   });
