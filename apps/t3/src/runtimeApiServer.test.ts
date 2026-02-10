@@ -1256,6 +1256,19 @@ describe("runtimeApiServer", () => {
     expect(unauthorizedWrongTokenKeyClose.code).toBe(WS_CLOSE_CODES.unauthorized);
     expect(unauthorizedWrongTokenKeyClose.reason).toBe(WS_CLOSE_REASONS.unauthorized);
 
+    const baseUrl = new URL(server.wsUrl);
+    const unauthorizedWrongPathClient = new WebSocket(`${baseUrl.origin}/unexpected`);
+    const unauthorizedWrongPathClose = await withTimeout(
+      new Promise<{ code: number; reason: string }>((resolve, reject) => {
+        unauthorizedWrongPathClient.once("close", (code, reason) =>
+          resolve({ code, reason: reason.toString() }),
+        );
+        unauthorizedWrongPathClient.once("error", (error) => reject(error));
+      }),
+    );
+    expect(unauthorizedWrongPathClose.code).toBe(WS_CLOSE_CODES.unauthorized);
+    expect(unauthorizedWrongPathClose.reason).toBe(WS_CLOSE_REASONS.unauthorized);
+
     const response = await sendRequest(
       activeClient.socket,
       activeClient.nextMessage,
