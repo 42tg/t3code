@@ -526,7 +526,7 @@ export function resolveStaticAssetPath(
       return "/";
     }
 
-    if (requestUrl.startsWith("http://") || requestUrl.startsWith("https://")) {
+    if (/^https?:\/\//i.test(requestUrl)) {
       try {
         return new URL(requestUrl).pathname;
       } catch {

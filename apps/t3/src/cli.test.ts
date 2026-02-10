@@ -840,6 +840,14 @@ describe("resolveStaticAssetPath", () => {
     });
   });
 
+  it("supports uppercase absolute-form request target schemes", () => {
+    const result = resolveStaticAssetPath("HTTP://127.0.0.1/assets/main.js?x=1", distRoot);
+    expect(result).toEqual({
+      kind: "file",
+      filePath: path.join(distRoot, "assets", "main.js"),
+    });
+  });
+
   it("rejects malformed absolute-form request targets", () => {
     const result = resolveStaticAssetPath("http://%zz", distRoot);
     expect(result).toEqual({
