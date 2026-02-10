@@ -28,6 +28,21 @@ function hasOwn(value, key) {
   return Object.prototype.hasOwnProperty.call(value, key);
 }
 
+function hasOnlyKeys(value, allowedKeys) {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const allowed = new Set(allowedKeys);
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function parseWsMessage(raw) {
   let parsed;
   try {
@@ -41,6 +56,9 @@ function parseWsMessage(raw) {
   }
 
   if (parsed.type === "hello") {
+    if (!hasOnlyKeys(parsed, ["type", "version", "launchCwd"])) {
+      return null;
+    }
     if (parsed.version !== 1) {
       return null;
     }
@@ -63,10 +81,17 @@ function parseWsMessage(raw) {
   }
 
   if (parsed.ok) {
+    if (!hasOnlyKeys(parsed, ["type", "id", "ok", "result"])) {
+      return null;
+    }
     if (!hasOwn(parsed, "result") || hasOwn(parsed, "error")) {
       return null;
     }
     return parsed;
+  }
+
+  if (!hasOnlyKeys(parsed, ["type", "id", "ok", "error"])) {
+    return null;
   }
 
   if (hasOwn(parsed, "result")) {
@@ -75,6 +100,7 @@ function parseWsMessage(raw) {
 
   if (
     !isRecord(parsed.error) ||
+    !hasOnlyKeys(parsed.error, ["code", "message"]) ||
     typeof parsed.error.code !== "string" ||
     typeof parsed.error.message !== "string"
   ) {
@@ -85,6 +111,10 @@ function parseWsMessage(raw) {
 }
 
 function parseWsEventMessage(parsed) {
+  if (!hasOnlyKeys(parsed, ["type", "channel", "payload"])) {
+    return null;
+  }
+
   if (!hasOwn(parsed, "payload")) {
     return null;
   }
