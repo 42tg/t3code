@@ -1,10 +1,12 @@
 import fs from "node:fs";
 import net from "node:net";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { fixPath } from "./fixPath";
 import { createLogger } from "./logger";
+import { ProjectRegistry } from "./projectRegistry";
 import { createServer } from "./wsServer";
 
 fixPath();
@@ -12,6 +14,40 @@ fixPath();
 const DEFAULT_PORT = 3773;
 const cwd = process.cwd();
 const logger = createLogger("server");
+
+type RuntimeMode = "web" | "desktop";
+
+function parseBooleanEnv(value: string | undefined): boolean | undefined {
+  if (value === undefined) return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return undefined;
+}
+
+function parsePort(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+    throw new Error(`Invalid CODETHING_PORT: ${value}`);
+  }
+  return parsed;
+}
+
+function expandHomePath(input: string): string {
+  if (input === "~") return os.homedir();
+  if (input.startsWith("~/")) {
+    return path.join(os.homedir(), input.slice(2));
+  }
+  return input;
+}
+
+function resolveStateDir(raw: string | undefined): string {
+  if (!raw || raw.trim().length === 0) {
+    return path.join(os.homedir(), ".t3", "userdata");
+  }
+  return path.resolve(expandHomePath(raw.trim()));
+}
 
 async function findAvailablePort(preferred: number): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -24,8 +60,7 @@ async function findAvailablePort(preferred: number): Promise<number> {
       const fallback = net.createServer();
       fallback.listen(0, () => {
         const addr = fallback.address();
-        const port =
-          typeof addr === "object" && addr !== null ? addr.port : 0;
+        const port = typeof addr === "object" && addr !== null ? addr.port : 0;
         fallback.close(() => {
           if (port > 0) resolve(port);
           else reject(new Error("Could not find an available port."));
@@ -62,35 +97,54 @@ function resolveStaticDir(): string | undefined {
 }
 
 async function main() {
-  const port = await findAvailablePort(DEFAULT_PORT);
+  const mode: RuntimeMode = process.env.CODETHING_MODE === "desktop" ? "desktop" : "web";
+  const requestedPort = parsePort(process.env.CODETHING_PORT);
+  const port =
+    requestedPort ?? (mode === "desktop" ? DEFAULT_PORT : await findAvailablePort(DEFAULT_PORT));
+  const stateDir = resolveStateDir(process.env.CODETHING_STATE_DIR);
+  const projectRegistry = new ProjectRegistry(stateDir);
   const devUrl = process.env.VITE_DEV_SERVER_URL;
+  const noBrowser = parseBooleanEnv(process.env.CODETHING_NO_BROWSER) ?? mode === "desktop";
+  const authToken = process.env.CODETHING_AUTH_TOKEN;
   const staticDir = devUrl ? undefined : resolveStaticDir();
 
   if (!devUrl && !staticDir) {
-    logger.warn(
-      "renderer bundle missing and no VITE_DEV_SERVER_URL; web UI unavailable",
-      {
-        hint:
-          "Run `bun run --cwd apps/renderer build` or set VITE_DEV_SERVER_URL for dev mode.",
-      },
-    );
+    logger.warn("renderer bundle missing and no VITE_DEV_SERVER_URL; web UI unavailable", {
+      hint: "Run `bun run --cwd apps/renderer build` or set VITE_DEV_SERVER_URL for dev mode.",
+    });
   }
 
-  const server = createServer({ port, cwd, staticDir, devUrl });
+  const server = createServer({
+    port,
+    host: mode === "desktop" ? "127.0.0.1" : undefined,
+    cwd,
+    staticDir,
+    devUrl,
+    projectRegistry,
+    authToken,
+  });
   await server.start();
 
   const url = `http://localhost:${port}`;
-  logger.info("CodeThing running", { url, cwd });
+  logger.info("CodeThing running", {
+    url,
+    cwd,
+    mode,
+    stateDir,
+    authEnabled: Boolean(authToken),
+  });
 
   // Open browser (dynamic import because `open` is ESM-only)
-  try {
-    const open = await import("open");
-    const target = devUrl ?? url;
-    await open.default(target);
-  } catch {
-    logger.info("browser auto-open unavailable", {
-      hint: `Open ${devUrl ?? url} in your browser.`,
-    });
+  if (!noBrowser) {
+    try {
+      const open = await import("open");
+      const target = devUrl ?? url;
+      await open.default(target);
+    } catch {
+      logger.info("browser auto-open unavailable", {
+        hint: `Open ${devUrl ?? url} in your browser.`,
+      });
+    }
   }
 
   // Graceful shutdown

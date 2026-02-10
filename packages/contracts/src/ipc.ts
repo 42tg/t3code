@@ -9,6 +9,12 @@ import type {
   ProviderStopSessionInput,
   ProviderTurnStartResult,
 } from "./provider";
+import type {
+  ProjectAddInput,
+  ProjectAddResult,
+  ProjectListResult,
+  ProjectRemoveInput,
+} from "./project";
 import type { TerminalCommandInput, TerminalCommandResult } from "./terminal";
 import type { NewTodoInput, Todo } from "./todo";
 
@@ -47,6 +53,11 @@ export interface NativeApi {
     stopSession: (input: ProviderStopSessionInput) => Promise<void>;
     listSessions: () => Promise<ProviderSession[]>;
     onEvent: (callback: (event: ProviderEvent) => void) => () => void;
+  };
+  projects: {
+    list: () => Promise<ProjectListResult>;
+    add: (input: ProjectAddInput) => Promise<ProjectAddResult>;
+    remove: (input: ProjectRemoveInput) => Promise<void>;
   };
   shell: {
     openInEditor: (cwd: string, editor: EditorId) => Promise<void>;

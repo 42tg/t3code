@@ -1,9 +1,4 @@
-import {
-  type NativeApi,
-  WS_CHANNELS,
-  WS_METHODS,
-  type WsWelcomePayload,
-} from "@acme/contracts";
+import { type NativeApi, WS_CHANNELS, WS_METHODS, type WsWelcomePayload } from "@acme/contracts";
 
 import { WsTransport } from "./wsTransport";
 
@@ -16,9 +11,7 @@ let lastWelcome: WsWelcomePayload | null = null;
  * before this call, the listener fires synchronously with the cached payload.
  * This avoids the race between WebSocket connect and React effect registration.
  */
-export function onServerWelcome(
-  listener: (payload: WsWelcomePayload) => void,
-): () => void {
+export function onServerWelcome(listener: (payload: WsWelcomePayload) => void): () => void {
   welcomeListeners.add(listener);
 
   // Replay cached welcome for late subscribers
@@ -62,7 +55,10 @@ export function createWsNativeApi(): NativeApi {
       remove: async () => [],
     },
     dialogs: {
-      pickFolder: async () => null,
+      pickFolder: async () => {
+        if (!window.desktopBridge) return null;
+        return window.desktopBridge.pickFolder();
+      },
     },
     terminal: {
       run: async () => ({
@@ -81,20 +77,19 @@ export function createWsNativeApi(): NativeApi {
       onExit: () => () => {},
     },
     providers: {
-      startSession: (input) =>
-        transport.request(WS_METHODS.providersStartSession, input),
-      sendTurn: (input) =>
-        transport.request(WS_METHODS.providersSendTurn, input),
-      interruptTurn: (input) =>
-        transport.request(WS_METHODS.providersInterruptTurn, input),
-      respondToRequest: (input) =>
-        transport.request(WS_METHODS.providersRespondToRequest, input),
-      stopSession: (input) =>
-        transport.request(WS_METHODS.providersStopSession, input),
-      listSessions: () =>
-        transport.request(WS_METHODS.providersListSessions),
+      startSession: (input) => transport.request(WS_METHODS.providersStartSession, input),
+      sendTurn: (input) => transport.request(WS_METHODS.providersSendTurn, input),
+      interruptTurn: (input) => transport.request(WS_METHODS.providersInterruptTurn, input),
+      respondToRequest: (input) => transport.request(WS_METHODS.providersRespondToRequest, input),
+      stopSession: (input) => transport.request(WS_METHODS.providersStopSession, input),
+      listSessions: () => transport.request(WS_METHODS.providersListSessions),
       onEvent: (callback) =>
         transport.subscribe(WS_CHANNELS.providerEvent, callback as (data: unknown) => void),
+    },
+    projects: {
+      list: () => transport.request(WS_METHODS.projectsList),
+      add: (input) => transport.request(WS_METHODS.projectsAdd, input),
+      remove: (input) => transport.request(WS_METHODS.projectsRemove, input),
     },
     shell: {
       openInEditor: (cwd, editor) =>

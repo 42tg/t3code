@@ -11,6 +11,11 @@ export const WS_METHODS = {
   providersStopSession: "providers.stopSession",
   providersListSessions: "providers.listSessions",
 
+  // Project registry methods
+  projectsList: "projects.list",
+  projectsAdd: "projects.add",
+  projectsRemove: "projects.remove",
+
   // Shell methods
   shellOpenInEditor: "shell.openInEditor",
 

@@ -3,6 +3,7 @@
 CodeThing is a minimal web GUI for coding agents. Currently Codex-first, with Claude Code support coming soon.
 
 Run `npx t3` in any project directory to launch the web interface.
+Run `bun run dev:desktop` to launch the Electron desktop app in this monorepo.
 
 ## Architecture
 
@@ -30,6 +31,7 @@ CodeThing runs as a **Node.js WebSocket server** that wraps `codex app-server` (
 
 - `/apps/server`: Node.js WebSocket server. Wraps Codex app-server, serves the built renderer, and opens the browser on start.
 - `/apps/renderer`: React + Vite UI. Session control, conversation, and provider event rendering. Connects to the server via WebSocket.
+- `/apps/desktop`: Electron shell. Spawns a desktop-scoped `t3` backend process and loads the shared renderer.
 - `/packages/contracts`: Shared Zod schemas and TypeScript contracts for provider events, WebSocket protocol, and model/session types.
 
 ## Codex prerequisites
@@ -43,6 +45,9 @@ CodeThing runs as a **Node.js WebSocket server** that wraps `codex app-server` (
 ```bash
 # Development (with hot reload)
 bun run dev
+
+# Desktop development
+bun run dev:desktop
 
 # Production
 bun run build
@@ -77,6 +82,7 @@ The renderer communicates with the server via WebSocket using a simple JSON-RPC-
 - **Push events**: `{ type: "push", channel, data }` for streaming provider events
 
 Methods mirror the `NativeApi` interface defined in `@acme/contracts`:
+
 - `providers.startSession`, `providers.sendTurn`, `providers.interruptTurn`
 - `providers.respondToRequest`, `providers.stopSession`, `providers.listSessions`
 - `shell.openInEditor`, `server.getConfig`

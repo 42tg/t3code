@@ -1,7 +1,9 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
+import os from "node:os";
 import path from "node:path";
+import type { Duplex } from "node:stream";
 
 import {
   EDITORS,
@@ -15,6 +17,7 @@ import {
 import { WebSocketServer, type WebSocket } from "ws";
 
 import { createLogger } from "./logger";
+import { ProjectRegistry } from "./projectRegistry";
 import { ProviderManager } from "./providerManager";
 
 const MIME_TYPES: Record<string, string> = {
@@ -34,10 +37,13 @@ const MIME_TYPES: Record<string, string> = {
 
 export interface ServerOptions {
   port: number;
+  host?: string | undefined;
   cwd: string;
   staticDir?: string | undefined;
   devUrl?: string | undefined;
   logWebSocketEvents?: boolean | undefined;
+  projectRegistry?: ProjectRegistry | undefined;
+  authToken?: string | undefined;
 }
 
 function parseBooleanEnv(value: string | undefined): boolean | undefined {
@@ -49,14 +55,23 @@ function parseBooleanEnv(value: string | undefined): boolean | undefined {
 }
 
 export function createServer(options: ServerOptions) {
-  const { port, cwd, staticDir, devUrl, logWebSocketEvents: explicitLogWsEvents } = options;
+  const {
+    port,
+    host,
+    cwd,
+    staticDir,
+    devUrl,
+    logWebSocketEvents: explicitLogWsEvents,
+    projectRegistry: providedRegistry,
+    authToken,
+  } = options;
   const providerManager = new ProviderManager();
+  const projectRegistry =
+    providedRegistry ?? new ProjectRegistry(path.join(os.homedir(), ".t3", "userdata"));
   const clients = new Set<WebSocket>();
   const logger = createLogger("ws");
   const logWebSocketEvents =
-    explicitLogWsEvents ??
-    parseBooleanEnv(process.env.CODETHING_LOG_WS_EVENTS) ??
-    Boolean(devUrl);
+    explicitLogWsEvents ?? parseBooleanEnv(process.env.CODETHING_LOG_WS_EVENTS) ?? Boolean(devUrl);
 
   function logOutgoingPush(push: WsPush, recipients: number) {
     if (!logWebSocketEvents) return;
@@ -142,7 +157,41 @@ export function createServer(options: ServerOptions) {
   });
 
   // WebSocket server — upgrades from the HTTP server
-  const wss = new WebSocketServer({ server: httpServer });
+  const wss = new WebSocketServer({ noServer: true });
+
+  function rejectUpgrade(socket: Duplex, statusCode: number, message: string): void {
+    socket.write(
+      `HTTP/1.1 ${statusCode} ${statusCode === 401 ? "Unauthorized" : "Bad Request"}\r\n` +
+        "Connection: close\r\n" +
+        "Content-Type: text/plain\r\n" +
+        `Content-Length: ${Buffer.byteLength(message)}\r\n` +
+        "\r\n" +
+        message,
+    );
+    socket.destroy();
+  }
+
+  httpServer.on("upgrade", (request, socket, head) => {
+    if (authToken) {
+      let providedToken: string | null = null;
+      try {
+        const url = new URL(request.url ?? "/", `http://localhost:${port}`);
+        providedToken = url.searchParams.get("token");
+      } catch {
+        rejectUpgrade(socket, 400, "Invalid WebSocket URL");
+        return;
+      }
+
+      if (providedToken !== authToken) {
+        rejectUpgrade(socket, 401, "Unauthorized WebSocket connection");
+        return;
+      }
+    }
+
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit("connection", ws, request);
+    });
+  });
 
   wss.on("connection", (ws) => {
     clients.add(ws);
@@ -191,8 +240,7 @@ export function createServer(options: ServerOptions) {
       const response: WsResponse = { id: request.id, result };
       ws.send(JSON.stringify(response));
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Unknown server error";
+      const message = err instanceof Error ? err.message : "Unknown server error";
       const response: WsResponse = {
         id: request.id,
         error: { message },
@@ -222,6 +270,16 @@ export function createServer(options: ServerOptions) {
 
       case WS_METHODS.providersListSessions:
         return providerManager.listSessions();
+
+      case WS_METHODS.projectsList:
+        return projectRegistry.list();
+
+      case WS_METHODS.projectsAdd:
+        return projectRegistry.add(request.params as never);
+
+      case WS_METHODS.projectsRemove:
+        projectRegistry.remove(request.params as never);
+        return undefined;
 
       case WS_METHODS.shellOpenInEditor: {
         const params = request.params as {
@@ -255,10 +313,21 @@ export function createServer(options: ServerOptions) {
   }
 
   function start() {
-    return new Promise<void>((resolve) => {
-      httpServer.listen(port, () => {
+    return new Promise<void>((resolve, reject) => {
+      const onError = (error: Error) => {
+        httpServer.off("error", onError);
+        reject(error);
+      };
+      httpServer.once("error", onError);
+      const onListening = () => {
+        httpServer.off("error", onError);
         resolve();
-      });
+      };
+      if (host) {
+        httpServer.listen(port, host, onListening);
+        return;
+      }
+      httpServer.listen(port, onListening);
     });
   }
 

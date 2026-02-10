@@ -22,14 +22,17 @@ export class WsTransport {
   private readonly url: string;
 
   constructor(url?: string) {
+    const bridgeUrl = window.desktopBridge?.getWsUrl();
     // In dev mode, VITE_WS_URL points to the server's WebSocket endpoint.
     // In production, the page is served by the WS server on the same host:port.
     const envUrl = import.meta.env.VITE_WS_URL as string | undefined;
     this.url =
       url ??
-      (envUrl && envUrl.length > 0
-        ? envUrl
-        : `ws://${window.location.hostname}:${window.location.port}`);
+      (bridgeUrl && bridgeUrl.length > 0
+        ? bridgeUrl
+        : envUrl && envUrl.length > 0
+          ? envUrl
+          : `ws://${window.location.hostname}:${window.location.port}`);
     this.connect();
   }
 
@@ -182,9 +185,8 @@ export class WsTransport {
     if (this.disposed) return;
 
     const delay =
-      RECONNECT_DELAYS_MS[
-        Math.min(this.reconnectAttempt, RECONNECT_DELAYS_MS.length - 1)
-      ] ?? RECONNECT_DELAYS_MS[0]!;
+      RECONNECT_DELAYS_MS[Math.min(this.reconnectAttempt, RECONNECT_DELAYS_MS.length - 1)] ??
+      RECONNECT_DELAYS_MS[0]!;
 
     this.reconnectAttempt++;
     this.reconnectTimer = setTimeout(() => {
