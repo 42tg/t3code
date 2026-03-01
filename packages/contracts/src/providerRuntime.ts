@@ -25,6 +25,9 @@ export const RuntimeEventRawSource = Schema.Literals([
   "claude.sdk.message",
   "claude.sdk.permission",
   "codex.sdk.thread-event",
+  "cursor.acp.notification",
+  "cursor.acp.request",
+  "cursor.acp.response",
 ]);
 export type RuntimeEventRawSource = typeof RuntimeEventRawSource.Type;
 
@@ -94,6 +97,12 @@ export const CanonicalItemType = Schema.Literals([
   "file_change",
   "mcp_tool_call",
   "dynamic_tool_call",
+  "collab_agent_tool_call",
+  "web_search",
+  "image_view",
+  "review_entered",
+  "review_exited",
+  "context_compaction",
   "error",
   "unknown",
 ]);
