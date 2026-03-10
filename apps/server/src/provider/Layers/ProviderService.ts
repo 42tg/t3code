@@ -180,11 +180,6 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
           const existing = activeSessions.find((session) => session.threadId === input.binding.threadId);
           if (existing) {
             yield* upsertSessionBinding(existing, input.binding.threadId);
-            yield* analytics.record("provider.session.recovered", {
-              provider: existing.provider,
-              strategy: "adopt-existing",
-              hasResumeCursor: existing.resumeCursor !== undefined,
-            });
             return { adapter, session: existing } as const;
           }
         }
@@ -213,11 +208,6 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
         }
 
         yield* upsertSessionBinding(resumed, input.binding.threadId);
-        yield* analytics.record("provider.session.recovered", {
-          provider: resumed.provider,
-          strategy: "resume-thread",
-          hasResumeCursor: resumed.resumeCursor !== undefined,
-        });
         return { adapter, session: resumed } as const;
       });
 
@@ -274,13 +264,6 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
         }
 
         yield* upsertSessionBinding(session, threadId);
-        yield* analytics.record("provider.session.started", {
-          provider: session.provider,
-          runtimeMode: input.runtimeMode,
-          hasResumeCursor: session.resumeCursor !== undefined,
-          hasCwd: typeof input.cwd === "string" && input.cwd.trim().length > 0,
-          hasModel: typeof input.model === "string" && input.model.trim().length > 0,
-        });
 
         return session;
       });
@@ -343,9 +326,6 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
           allowRecovery: true,
         });
         yield* routed.adapter.interruptTurn(routed.threadId, input.turnId);
-        yield* analytics.record("provider.turn.interrupted", {
-          provider: routed.adapter.provider,
-        });
       });
 
     const respondToRequest: ProviderServiceShape["respondToRequest"] = (rawInput) =>
@@ -361,10 +341,6 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
           allowRecovery: true,
         });
         yield* routed.adapter.respondToRequest(routed.threadId, input.requestId, input.decision);
-        yield* analytics.record("provider.request.responded", {
-          provider: routed.adapter.provider,
-          decision: input.decision,
-        });
       });
 
     const respondToUserInput: ProviderServiceShape["respondToUserInput"] = (rawInput) =>
@@ -398,9 +374,6 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
           yield* routed.adapter.stopSession(routed.threadId);
         }
         yield* directory.remove(input.threadId);
-        yield* analytics.record("provider.session.stopped", {
-          provider: routed.adapter.provider,
-        });
       });
 
     const listSessions: ProviderServiceShape["listSessions"] = () =>
@@ -436,17 +409,13 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
             return session;
           }
 
-          const overrides: {
-            resumeCursor?: ProviderSession["resumeCursor"];
-            runtimeMode?: ProviderSession["runtimeMode"];
-          } = {};
-          if (session.resumeCursor === undefined && binding.resumeCursor !== undefined) {
-            overrides.resumeCursor = binding.resumeCursor;
-          }
-          if (binding.runtimeMode !== undefined) {
-            overrides.runtimeMode = binding.runtimeMode;
-          }
-          return Object.assign({}, session, overrides);
+          return {
+            ...session,
+            ...(session.resumeCursor === undefined && binding.resumeCursor !== undefined
+              ? { resumeCursor: binding.resumeCursor }
+              : {}),
+            ...(binding.runtimeMode !== undefined ? { runtimeMode: binding.runtimeMode } : {}),
+          };
         });
       });
 
@@ -469,10 +438,6 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
           allowRecovery: true,
         });
         yield* routed.adapter.rollbackThread(routed.threadId, input.numTurns);
-        yield* analytics.record("provider.conversation.rolled_back", {
-          provider: routed.adapter.provider,
-          turns: input.numTurns,
-        });
       });
 
     const runStopAll = () =>
@@ -495,10 +460,6 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
             ),
           ),
         ).pipe(Effect.asVoid);
-        yield* analytics.record("provider.sessions.stopped_all", {
-          sessionCount: threadIds.length,
-        });
-        yield* analytics.flush;
       });
 
     yield* Effect.addFinalizer(() =>
@@ -517,6 +478,7 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
       listSessions,
       getCapabilities,
       rollbackConversation,
+      stopAll: runStopAll,
       streamEvents: Stream.fromPubSub(runtimeEventPubSub),
     } satisfies ProviderServiceShape;
   });

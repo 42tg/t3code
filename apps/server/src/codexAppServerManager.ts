@@ -327,6 +327,17 @@ Do not ask "should I proceed?" in the final output. The user can easily switch o
 Only produce at most one \`<proposed_plan>\` block per turn, and only when you are presenting a complete spec.
 </collaboration_mode>`;
 
+export function resolveCodexModelForAccount(
+  model: string | undefined,
+  account: CodexAccountSnapshot,
+): string | undefined {
+  if (model !== CODEX_SPARK_MODEL || account.sparkEnabled) {
+    return model;
+  }
+
+  return CODEX_DEFAULT_MODEL;
+}
+
 export const CODEX_DEFAULT_MODE_DEVELOPER_INSTRUCTIONS = `<collaboration_mode># Collaboration Mode: Default
 
 You are now in Default mode. Any previous instructions for other modes (e.g. Plan mode) are no longer active.
@@ -355,17 +366,6 @@ function mapCodexRuntimeMode(runtimeMode: RuntimeMode): {
     approvalPolicy: "never",
     sandbox: "danger-full-access",
   };
-}
-
-export function resolveCodexModelForAccount(
-  model: string | undefined,
-  account: CodexAccountSnapshot,
-): string | undefined {
-  if (model !== CODEX_SPARK_MODEL || account.sparkEnabled) {
-    return model;
-  }
-
-  return CODEX_DEFAULT_MODEL;
 }
 
 /**
@@ -452,14 +452,18 @@ function toCodexUserInputAnswer(value: unknown): CodexUserInputAnswer {
 
   if (Array.isArray(value)) {
     const answers = value.filter((entry): entry is string => typeof entry === "string");
-    return { answers };
+    if (answers.length > 0) {
+      return { answers };
+    }
   }
 
   if (value && typeof value === "object") {
     const maybeAnswers = (value as { answers?: unknown }).answers;
     if (Array.isArray(maybeAnswers)) {
       const answers = maybeAnswers.filter((entry): entry is string => typeof entry === "string");
-      return { answers };
+      if (answers.length > 0) {
+        return { answers };
+      }
     }
   }
 
@@ -543,11 +547,6 @@ export class CodexAppServerManager extends EventEmitter<CodexAppServerManagerEve
       const codexOptions = readCodexProviderOptions(input);
       const codexBinaryPath = codexOptions.binaryPath ?? "codex";
       const codexHomePath = codexOptions.homePath;
-      this.assertSupportedCodexCliVersion({
-        binaryPath: codexBinaryPath,
-        cwd: resolvedCwd,
-        ...(codexHomePath ? { homePath: codexHomePath } : {}),
-      });
       const child = spawn(codexBinaryPath, ["app-server"], {
         cwd: resolvedCwd,
         env: {
@@ -783,10 +782,7 @@ export class CodexAppServerManager extends EventEmitter<CodexAppServerManagerEve
       threadId: providerThreadId,
       input: turnInput,
     };
-    const normalizedModel = resolveCodexModelForAccount(
-      normalizeCodexModelSlug(input.model ?? context.session.model),
-      context.account,
-    );
+    const normalizedModel = normalizeCodexModelSlug(input.model ?? context.session.model);
     if (normalizedModel) {
       turnStartParams.model = normalizedModel;
     }

@@ -1,10 +1,12 @@
 import {
   type ApprovalRequestId,
-  DEFAULT_MODEL_BY_PROVIDER,
+  CURSOR_REASONING_OPTIONS,
+  DEFAULT_MODEL,
   EDITORS,
   type EditorId,
   type KeybindingCommand,
   type CodexReasoningEffort,
+  type CursorReasoningOption,
   type MessageId,
   type ProjectId,
   type ProjectEntry,
@@ -25,8 +27,12 @@ import {
 import {
   getDefaultModel,
   getDefaultReasoningEffort,
+  getCursorModelCapabilities,
+  getCursorModelFamilyOptions,
   getReasoningEffortOptions,
   normalizeModelSlug,
+  parseCursorModelSelection,
+  resolveCursorModelFromSelection,
   resolveModelSlugForProvider,
 } from "@t3tools/shared/model";
 import {
@@ -67,12 +73,10 @@ import {
   derivePendingUserInputs,
   derivePhase,
   deriveTimelineEntries,
-  deriveActiveWorkStartedAt,
   deriveActivePlanState,
   findLatestProposedPlan,
   type PendingApproval,
   type PendingUserInput,
-  type ProviderPickerKind,
   PROVIDER_OPTIONS,
   deriveWorkLogEntries,
   hasToolActivityForTurn,
@@ -93,7 +97,6 @@ import {
   buildPlanImplementationPrompt,
   buildProposedPlanMarkdownFilename,
   proposedPlanTitle,
-  resolvePlanFollowUpSubmission,
 } from "../proposedPlan";
 import { truncateTitle } from "../truncateTitle";
 import {
@@ -123,7 +126,7 @@ import {
 } from "../keybindings";
 import ChatMarkdown from "./ChatMarkdown";
 import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
-import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "./ui/alert";
 import {
   BotIcon,
   ChevronDownIcon,
@@ -135,13 +138,13 @@ import {
   DiffIcon,
   EllipsisIcon,
   FolderClosedIcon,
+  InfoIcon,
   LockIcon,
   LockOpenIcon,
   Undo2Icon,
   XIcon,
   CopyIcon,
   CheckIcon,
-  ZapIcon,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -198,14 +201,7 @@ import { Toggle } from "./ui/toggle";
 import { SidebarTrigger } from "./ui/sidebar";
 import { newCommandId, newMessageId, newThreadId } from "~/lib/utils";
 import { readNativeApi } from "~/nativeApi";
-import {
-  getAppModelOptions,
-  resolveAppModelSelection,
-  resolveAppServiceTier,
-  shouldShowFastTierIcon,
-  type AppServiceTier,
-  useAppSettings,
-} from "../appSettings";
+import { getAppModelOptions, useAppSettings } from "../appSettings";
 import {
   type ComposerImageAttachment,
   type DraftThreadEnvMode,
@@ -222,29 +218,6 @@ import { estimateTimelineMessageHeight } from "./timelineHeight";
 function formatMessageMeta(createdAt: string, duration: string | null): string {
   if (!duration) return formatTimestamp(createdAt);
   return `${formatTimestamp(createdAt)} • ${duration}`;
-}
-
-function formatWorkingTimer(startIso: string, endIso: string): string | null {
-  const startedAtMs = Date.parse(startIso);
-  const endedAtMs = Date.parse(endIso);
-  if (!Number.isFinite(startedAtMs) || !Number.isFinite(endedAtMs)) {
-    return null;
-  }
-
-  const elapsedSeconds = Math.max(0, Math.floor((endedAtMs - startedAtMs) / 1000));
-  if (elapsedSeconds < 60) {
-    return `${elapsedSeconds}s`;
-  }
-
-  const hours = Math.floor(elapsedSeconds / 3600);
-  const minutes = Math.floor((elapsedSeconds % 3600) / 60);
-  const seconds = elapsedSeconds % 60;
-
-  if (hours > 0) {
-    return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
-  }
-
-  return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
 }
 
 const LAST_EDITOR_KEY = "t3code:last-editor";
@@ -420,7 +393,6 @@ type ComposerCommandItem =
       model: ModelSlug;
       label: string;
       description: string;
-      showFastBadge: boolean;
     };
 
 type SendPhase = "idle" | "preparing-worktree" | "sending-turn";
@@ -530,12 +502,7 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
           model
         </Badge>
       ) : null}
-      <span className="flex min-w-0 items-center gap-1.5 truncate">
-        {props.item.type === "model" && props.item.showFastBadge ? (
-          <ZapIcon className="size-3.5 shrink-0 text-amber-500" />
-        ) : null}
-        <span className="truncate">{props.item.label}</span>
-      </span>
+      <span className="truncate">{props.item.label}</span>
       <span className="truncate text-muted-foreground/70 text-xs">{props.item.description}</span>
     </CommandItem>
   );
@@ -613,9 +580,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const setComposerDraftProvider = useComposerDraftStore((store) => store.setProvider);
   const setComposerDraftModel = useComposerDraftStore((store) => store.setModel);
   const setComposerDraftRuntimeMode = useComposerDraftStore((store) => store.setRuntimeMode);
-  const setComposerDraftInteractionMode = useComposerDraftStore(
-    (store) => store.setInteractionMode,
-  );
+  const setComposerDraftInteractionMode = useComposerDraftStore((store) => store.setInteractionMode);
   const setComposerDraftEffort = useComposerDraftStore((store) => store.setEffort);
   const setComposerDraftCodexFastMode = useComposerDraftStore((store) => store.setCodexFastMode);
   const addComposerDraftImage = useComposerDraftStore((store) => store.addImage);
@@ -643,7 +608,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
     Record<ThreadId, string | null>
   >({});
   const [sendPhase, setSendPhase] = useState<SendPhase>("idle");
-  const [sendStartedAt, setSendStartedAt] = useState<string | null>(null);
   const [isConnecting, _setIsConnecting] = useState(false);
   const [isRevertingCheckpoint, setIsRevertingCheckpoint] = useState(false);
   const [respondingRequestIds, setRespondingRequestIds] = useState<ApprovalRequestId[]>([]);
@@ -744,15 +708,14 @@ export default function ChatView({ threadId }: ChatViewProps) {
         ? buildLocalDraftThread(
             threadId,
             draftThread,
-            fallbackDraftProject?.model ?? DEFAULT_MODEL_BY_PROVIDER.codex,
+            fallbackDraftProject?.model ?? DEFAULT_MODEL,
             localDraftError,
           )
         : undefined,
     [draftThread, fallbackDraftProject?.model, localDraftError, threadId],
   );
   const activeThread = serverThread ?? localDraftThread;
-  const runtimeMode =
-    composerDraft.runtimeMode ?? activeThread?.runtimeMode ?? DEFAULT_RUNTIME_MODE;
+  const runtimeMode = composerDraft.runtimeMode ?? activeThread?.runtimeMode ?? DEFAULT_RUNTIME_MODE;
   const interactionMode =
     composerDraft.interactionMode ?? activeThread?.interactionMode ?? DEFAULT_INTERACTION_MODE;
   const isServerThread = serverThread !== undefined;
@@ -793,28 +756,45 @@ export default function ChatView({ threadId }: ChatViewProps) {
       activeThread.messages.length > 0 ||
       activeThread.session !== null),
   );
-  const selectedServiceTierSetting = settings.codexServiceTier;
-  const selectedServiceTier = resolveAppServiceTier(selectedServiceTierSetting);
   const lockedProvider: ProviderKind | null = hasThreadStarted
     ? (sessionProvider ?? selectedProviderByThreadId ?? null)
     : null;
   const selectedProvider: ProviderKind = lockedProvider ?? selectedProviderByThreadId ?? "codex";
+  const cursorModelSelectionLockedReason =
+    hasThreadStarted && selectedProvider === "cursor"
+      ? "Cursor currently does not support changing models after the first message in a thread."
+      : null;
   const baseThreadModel = resolveModelSlugForProvider(
     selectedProvider,
-    activeThread?.model ?? activeProject?.model ?? getDefaultModel(selectedProvider),
+    activeThread?.model ??
+      activeProject?.model ??
+      getDefaultModel(selectedProvider) ??
+      DEFAULT_MODEL,
   );
-  const customModelsForSelectedProvider = settings.customCodexModels;
   const selectedModel = useMemo(() => {
     const draftModel = composerDraft.model;
     if (!draftModel) {
       return baseThreadModel;
     }
-    return resolveAppModelSelection(
-      selectedProvider,
-      customModelsForSelectedProvider,
-      draftModel,
-    ) as ModelSlug;
-  }, [baseThreadModel, composerDraft.model, customModelsForSelectedProvider, selectedProvider]);
+
+    const providerOptions = getCustomModelOptionsByProvider(settings)[selectedProvider];
+    const directMatch = providerOptions.find((option) => option.slug === draftModel);
+    if (directMatch) {
+      return directMatch.slug as ModelSlug;
+    }
+
+    const normalizedDraftModel = normalizeModelSlug(draftModel, selectedProvider);
+    if (normalizedDraftModel) {
+      const normalizedMatch = providerOptions.find(
+        (option) => option.slug === normalizedDraftModel,
+      );
+      if (normalizedMatch) {
+        return normalizedMatch.slug as ModelSlug;
+      }
+    }
+
+    return resolveModelSlugForProvider(selectedProvider, draftModel);
+  }, [baseThreadModel, composerDraft.model, selectedProvider, settings]);
   const reasoningOptions = getReasoningEffortOptions(selectedProvider);
   const supportsReasoningEffort = reasoningOptions.length > 0;
   const selectedEffort = composerDraft.effort ?? getDefaultReasoningEffort(selectedProvider);
@@ -830,16 +810,40 @@ export default function ChatView({ threadId }: ChatViewProps) {
     };
     return Object.keys(codexOptions).length > 0 ? { codex: codexOptions } : undefined;
   }, [selectedCodexFastModeEnabled, selectedEffort, selectedProvider, supportsReasoningEffort]);
-  const selectedModelForPicker = selectedModel;
+  const selectedCursorModel = useMemo(
+    () => (selectedProvider === "cursor" ? parseCursorModelSelection(selectedModel) : null),
+    [selectedModel, selectedProvider],
+  );
+  const selectedCursorModelCapabilities = useMemo(
+    () => (selectedCursorModel ? getCursorModelCapabilities(selectedCursorModel.family) : null),
+    [selectedCursorModel],
+  );
+  const hasSelectedCursorTraits = Boolean(
+    selectedCursorModelCapabilities &&
+    (selectedCursorModelCapabilities.supportsReasoning ||
+      selectedCursorModelCapabilities.supportsFast ||
+      selectedCursorModelCapabilities.supportsThinking),
+  );
+  const selectedModelForPicker =
+    selectedProvider === "cursor" && selectedCursorModel
+      ? selectedCursorModel.family
+      : selectedModel;
   const modelOptionsByProvider = useMemo(
     () => getCustomModelOptionsByProvider(settings),
     [settings],
   );
   const selectedModelForPickerWithCustomFallback = useMemo(() => {
-    const currentOptions = modelOptionsByProvider[selectedProvider];
+    if (selectedProvider !== "cursor") {
+      const currentOptions = modelOptionsByProvider[selectedProvider];
+      return currentOptions.some((option) => option.slug === selectedModelForPicker)
+        ? selectedModelForPicker
+        : (normalizeModelSlug(selectedModelForPicker, selectedProvider) ?? selectedModelForPicker);
+    }
+
+    const currentOptions = modelOptionsByProvider.cursor;
     return currentOptions.some((option) => option.slug === selectedModelForPicker)
       ? selectedModelForPicker
-      : (normalizeModelSlug(selectedModelForPicker, selectedProvider) ?? selectedModelForPicker);
+      : selectedModelForPicker;
   }, [modelOptionsByProvider, selectedModelForPicker, selectedProvider]);
   const searchableModelOptions = useMemo(
     () =>
@@ -863,11 +867,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const isPreparingWorktree = sendPhase === "preparing-worktree";
   const isWorking = phase === "running" || isSendBusy || isConnecting || isRevertingCheckpoint;
   const nowIso = new Date(nowTick).toISOString();
-  const activeWorkStartedAt = deriveActiveWorkStartedAt(
-    activeLatestTurn,
-    activeThread?.session ?? null,
-    sendStartedAt,
-  );
   const threadActivities = activeThread?.activities ?? EMPTY_ACTIVITIES;
   const workLogEntries = useMemo(
     () => deriveWorkLogEntries(threadActivities, activeLatestTurn?.turnId ?? undefined),
@@ -936,12 +935,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
     interactionMode === "plan" &&
     latestTurnSettled &&
     activeProposedPlan !== null;
-  const activePendingApproval = pendingApprovals[0] ?? null;
-  const isComposerApprovalState = activePendingApproval !== null;
   const hasComposerHeader =
-    isComposerApprovalState ||
-    pendingUserInputs.length > 0 ||
-    (showPlanFollowUpPrompt && activeProposedPlan !== null);
+    pendingUserInputs.length > 0 || (showPlanFollowUpPrompt && activeProposedPlan !== null);
   useEffect(() => {
     if (!activePendingProgress) {
       return;
@@ -1251,10 +1246,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
         model: slug,
         label: name,
         description: `${providerLabel} · ${slug}`,
-        showFastBadge:
-          provider === "codex" && shouldShowFastTierIcon(slug, selectedServiceTierSetting),
       }));
-  }, [composerTrigger, searchableModelOptions, selectedServiceTierSetting, workspaceEntries]);
+  }, [composerTrigger, searchableModelOptions, workspaceEntries]);
   const composerMenuOpen = Boolean(composerTrigger);
   const activeComposerMenuItem = useMemo(
     () =>
@@ -1648,9 +1641,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
       threadId,
     ],
   );
-  const toggleInteractionMode = useCallback(() => {
-    handleInteractionModeChange(interactionMode === "plan" ? "default" : "plan");
-  }, [handleInteractionModeChange, interactionMode]);
 
   const persistThreadSettingsForNextTurn = useCallback(
     async (input: {
@@ -1973,7 +1963,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
       return [];
     });
     setSendPhase("idle");
-    setSendStartedAt(null);
     setComposerHighlightedItemId(null);
     setComposerCursor(promptRef.current.length);
     setComposerTrigger(detectComposerTrigger(promptRef.current, promptRef.current.length));
@@ -2112,37 +2101,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
       window.clearInterval(timer);
     };
   }, [phase]);
-
-  const beginSendPhase = useCallback((nextPhase: Exclude<SendPhase, "idle">) => {
-    setSendStartedAt((current) => current ?? new Date().toISOString());
-    setSendPhase(nextPhase);
-  }, []);
-
-  const resetSendPhase = useCallback(() => {
-    setSendPhase("idle");
-    setSendStartedAt(null);
-  }, []);
-
-  useEffect(() => {
-    if (sendPhase === "idle") {
-      return;
-    }
-    if (
-      phase === "running" ||
-      activePendingApproval !== null ||
-      activePendingUserInput !== null ||
-      activeThread?.error
-    ) {
-      resetSendPhase();
-    }
-  }, [
-    activePendingApproval,
-    activePendingUserInput,
-    activeThread?.error,
-    phase,
-    resetSendPhase,
-    sendPhase,
-  ]);
 
   useEffect(() => {
     if (!activeThreadId) return;
@@ -2405,18 +2363,19 @@ export default function ChatView({ threadId }: ChatViewProps) {
     }
     const trimmed = prompt.trim();
     if (showPlanFollowUpPrompt && activeProposedPlan) {
-      const followUp = resolvePlanFollowUpSubmission({
-        draftText: trimmed,
-        planMarkdown: activeProposedPlan.planMarkdown,
-      });
+      const followUpText =
+        trimmed.length > 0
+          ? trimmed
+          : buildPlanImplementationPrompt(activeProposedPlan.planMarkdown);
+      const nextInteractionMode = trimmed.length > 0 ? "plan" : "default";
       promptRef.current = "";
       clearComposerDraftContent(activeThread.id);
       setComposerHighlightedItemId(null);
       setComposerCursor(0);
       setComposerTrigger(null);
       await onSubmitPlanFollowUp({
-        text: followUp.text,
-        interactionMode: followUp.interactionMode,
+        text: followUpText,
+        interactionMode: nextInteractionMode,
       });
       return;
     }
@@ -2453,7 +2412,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     }
 
     sendInFlightRef.current = true;
-    beginSendPhase(baseBranchForWorktree ? "preparing-worktree" : "sending-turn");
+    setSendPhase(baseBranchForWorktree ? "preparing-worktree" : "sending-turn");
 
     const composerImagesSnapshot = [...composerImages];
     const messageIdForSend = newMessageId();
@@ -2504,7 +2463,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     await (async () => {
       // On first message: lock in branch + create worktree if needed.
       if (baseBranchForWorktree) {
-        beginSendPhase("preparing-worktree");
+        setSendPhase("preparing-worktree");
         const newBranch = buildTemporaryWorktreeBranchName();
         const result = await createWorktreeMutation.mutateAsync({
           cwd: activeProject.cwd,
@@ -2544,7 +2503,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
       }
       const title = truncateTitle(titleSeed);
       let threadCreateModel: ModelSlug =
-        selectedModel || (activeProject.model as ModelSlug) || DEFAULT_MODEL_BY_PROVIDER.codex;
+        selectedModel || (activeProject.model as ModelSlug) || DEFAULT_MODEL;
 
       if (isLocalDraftThread) {
         await api.orchestration.dispatchCommand({
@@ -2609,7 +2568,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
         });
       }
 
-      beginSendPhase("sending-turn");
+      setSendPhase("sending-turn");
       const turnAttachments = await turnAttachmentsPromise;
       await api.orchestration.dispatchCommand({
         type: "thread.turn.start",
@@ -2622,7 +2581,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
           attachments: turnAttachments,
         },
         model: selectedModel || undefined,
-        serviceTier: selectedServiceTier,
         ...(selectedModelOptionsForDispatch
           ? { modelOptions: selectedModelOptionsForDispatch }
           : {}),
@@ -2671,9 +2629,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
       );
     });
     sendInFlightRef.current = false;
-    if (!turnStartSucceeded) {
-      resetSendPhase();
-    }
+    setSendPhase("idle");
   };
 
   const onInterrupt = async () => {
@@ -2860,7 +2816,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
       const messageCreatedAt = new Date().toISOString();
 
       sendInFlightRef.current = true;
-      beginSendPhase("sending-turn");
+      setSendPhase("sending-turn");
       setThreadError(threadIdForSend, null);
       setOptimisticUserMessages((existing) => [
         ...existing,
@@ -2884,10 +2840,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
           interactionMode: nextInteractionMode,
         });
 
-        // Keep the mode toggle and plan-follow-up banner in sync immediately
-        // while the same-thread implementation turn is starting.
-        setComposerDraftInteractionMode(threadIdForSend, nextInteractionMode);
-
         await api.orchestration.dispatchCommand({
           type: "thread.turn.start",
           commandId: newCommandId(),
@@ -2909,6 +2861,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
           createdAt: messageCreatedAt,
         });
         sendInFlightRef.current = false;
+        setSendPhase("idle");
       } catch (err) {
         setOptimisticUserMessages((existing) =>
           existing.filter((message) => message.id !== messageIdForSend),
@@ -2918,23 +2871,20 @@ export default function ChatView({ threadId }: ChatViewProps) {
           err instanceof Error ? err.message : "Failed to send plan follow-up.",
         );
         sendInFlightRef.current = false;
-        resetSendPhase();
+        setSendPhase("idle");
       }
     },
     [
       activeThread,
-      beginSendPhase,
       forceStickToBottom,
       isConnecting,
       isSendBusy,
       isServerThread,
       persistThreadSettingsForNextTurn,
-      resetSendPhase,
       runtimeMode,
       selectedModel,
       selectedModelOptionsForDispatch,
       selectedProvider,
-      setComposerDraftInteractionMode,
       setThreadError,
       settings.enableAssistantStreaming,
     ],
@@ -2964,13 +2914,13 @@ export default function ChatView({ threadId }: ChatViewProps) {
       selectedModel ||
       (activeThread.model as ModelSlug) ||
       (activeProject.model as ModelSlug) ||
-      DEFAULT_MODEL_BY_PROVIDER.codex;
+      DEFAULT_MODEL;
 
     sendInFlightRef.current = true;
-    beginSendPhase("sending-turn");
+    setSendPhase("sending-turn");
     const finish = () => {
       sendInFlightRef.current = false;
-      resetSendPhase();
+      setSendPhase("idle");
     };
 
     await api.orchestration
@@ -3043,12 +2993,10 @@ export default function ChatView({ threadId }: ChatViewProps) {
     activeProject,
     activeProposedPlan,
     activeThread,
-    beginSendPhase,
     isConnecting,
     isSendBusy,
     isServerThread,
     navigate,
-    resetSendPhase,
     runtimeMode,
     selectedModel,
     selectedModelOptionsForDispatch,
@@ -3060,25 +3008,72 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const onProviderModelSelect = useCallback(
     (provider: ProviderKind, model: ModelSlug) => {
       if (!activeThread) return;
+      if (cursorModelSelectionLockedReason !== null && provider === "cursor") {
+        scheduleComposerFocus();
+        return;
+      }
       if (lockedProvider !== null && provider !== lockedProvider) {
         scheduleComposerFocus();
         return;
       }
+      const resolvedModel =
+        provider === "cursor"
+          ? resolveCursorModelFromSelection(parseCursorModelSelection(model))
+          : resolveModelSlugForProvider(provider, model);
       setComposerDraftProvider(activeThread.id, provider);
-      setComposerDraftModel(
-        activeThread.id,
-        resolveAppModelSelection(provider, settings.customCodexModels, model),
-      );
+      setComposerDraftModel(activeThread.id, resolvedModel);
       scheduleComposerFocus();
     },
     [
       activeThread,
+      cursorModelSelectionLockedReason,
       lockedProvider,
       scheduleComposerFocus,
       setComposerDraftModel,
       setComposerDraftProvider,
-      settings.customCodexModels,
     ],
+  );
+  const onCursorReasoningSelect = useCallback(
+    (reasoning: CursorReasoningOption) => {
+      if (selectedProvider !== "cursor") return;
+      const cursorSelection = parseCursorModelSelection(selectedModel);
+      const nextModel = resolveCursorModelFromSelection({
+        family: cursorSelection.family,
+        reasoning,
+        fast: cursorSelection.fast,
+        thinking: cursorSelection.thinking,
+      });
+      onProviderModelSelect("cursor", nextModel);
+    },
+    [onProviderModelSelect, selectedModel, selectedProvider],
+  );
+  const onCursorFastModeChange = useCallback(
+    (enabled: boolean) => {
+      if (selectedProvider !== "cursor") return;
+      const cursorSelection = parseCursorModelSelection(selectedModel);
+      const nextModel = resolveCursorModelFromSelection({
+        family: cursorSelection.family,
+        reasoning: cursorSelection.reasoning,
+        fast: enabled,
+        thinking: cursorSelection.thinking,
+      });
+      onProviderModelSelect("cursor", nextModel);
+    },
+    [onProviderModelSelect, selectedModel, selectedProvider],
+  );
+  const onCursorThinkingModeChange = useCallback(
+    (enabled: boolean) => {
+      if (selectedProvider !== "cursor") return;
+      const cursorSelection = parseCursorModelSelection(selectedModel);
+      const nextModel = resolveCursorModelFromSelection({
+        family: cursorSelection.family,
+        reasoning: cursorSelection.reasoning,
+        fast: cursorSelection.fast,
+        thinking: enabled,
+      });
+      onProviderModelSelect("cursor", nextModel);
+    },
+    [onProviderModelSelect, selectedModel, selectedProvider],
   );
   const onEffortSelect = useCallback(
     (effort: CodexReasoningEffort) => {
@@ -3285,11 +3280,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
     key: "ArrowDown" | "ArrowUp" | "Enter" | "Tab",
     event: KeyboardEvent,
   ) => {
-    if (key === "Tab" && event.shiftKey) {
-      toggleInteractionMode();
-      return true;
-    }
-
     const { trigger } = resolveActiveComposerTrigger();
     const menuIsActive = composerMenuOpenRef.current || trigger !== null;
 
@@ -3390,8 +3380,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
           activeThreadId={activeThread.id}
           activeThreadTitle={activeThread.title}
           activeProjectName={activeProject?.name}
-          isGitRepo={isGitRepo}
-          openInCwd={activeThread.worktreePath ?? activeProject?.cwd ?? null}
           activeProjectScripts={activeProject?.scripts}
           preferredScriptId={
             activeProject ? (lastInvokedScriptByProjectId[activeProject.id] ?? null) : null
@@ -3413,6 +3401,11 @@ export default function ChatView({ threadId }: ChatViewProps) {
       {/* Error banner */}
       <ProviderHealthBanner status={activeProviderStatus} />
       <ThreadErrorBanner error={activeThread.error} />
+      <PendingApprovalsPanel
+        pendingApprovals={pendingApprovals}
+        respondingRequestIds={respondingRequestIds}
+        onRespondToApproval={onRespondToApproval}
+      />
       <PlanModePanel activePlan={activePlan} />
 
       {/* Messages */}
@@ -3434,8 +3427,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
           key={activeThread.id}
           hasMessages={timelineEntries.length > 0}
           isWorking={isWorking}
-          activeTurnInProgress={isWorking || !latestTurnSettled}
-          activeTurnStartedAt={activeWorkStartedAt}
+          activeTurnInProgress={!latestTurnSettled}
+          activeTurnStartedAt={activeLatestTurn?.startedAt ?? null}
           scrollContainer={messagesScrollElement}
           timelineEntries={timelineEntries}
           completionDividerBeforeEntryId={completionDividerBeforeEntryId}
@@ -3464,7 +3457,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
           data-chat-composer-form="true"
         >
           <div
-            className={`group rounded-[20px] border bg-card transition-colors duration-200 focus-within:border-ring/45 ${
+            className={`group rounded-[20px] border bg-card transition-colors duration-200 focus-within:border-ring ${
               isDragOverComposer ? "border-primary/70 bg-accent/30" : "border-border"
             }`}
             onDragEnter={onComposerDragEnter}
@@ -3472,14 +3465,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
             onDragLeave={onComposerDragLeave}
             onDrop={onComposerDrop}
           >
-            {activePendingApproval ? (
-              <div className="rounded-t-[19px] border-b border-border/65 bg-muted/20">
-                <ComposerPendingApprovalPanel
-                  approval={activePendingApproval}
-                  pendingCount={pendingApprovals.length}
-                />
-              </div>
-            ) : pendingUserInputs.length > 0 ? (
+            {pendingUserInputs.length > 0 ? (
               <div className="rounded-t-[19px] border-b border-border/65 bg-muted/20">
                 <ComposerPendingUserInputPanel
                   pendingUserInputs={pendingUserInputs}
@@ -3505,7 +3491,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                 hasComposerHeader ? "pt-2.5 sm:pt-3" : "pt-3.5 sm:pt-4",
               )}
             >
-              {composerMenuOpen && !isComposerApprovalState && (
+              {composerMenuOpen && (
                 <div className="absolute inset-x-0 bottom-full z-20 mb-2 px-1">
                   <ComposerCommandMenu
                     items={composerMenuItems}
@@ -3519,7 +3505,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                 </div>
               )}
 
-              {!isComposerApprovalState && pendingUserInputs.length === 0 && composerImages.length > 0 && (
+              {pendingUserInputs.length === 0 && composerImages.length > 0 && (
                 <div className="mb-3 flex flex-wrap gap-2">
                   {composerImages.map((image) => (
                     <div
@@ -3585,21 +3571,13 @@ export default function ChatView({ threadId }: ChatViewProps) {
               )}
               <ComposerPromptEditor
                 ref={composerEditorRef}
-                value={
-                  isComposerApprovalState
-                    ? ""
-                    : activePendingProgress
-                      ? activePendingProgress.customAnswer
-                      : prompt
-                }
+                value={activePendingProgress ? activePendingProgress.customAnswer : prompt}
                 cursor={composerCursor}
                 onChange={onPromptChange}
                 onCommandKeyDown={onComposerCommandKey}
                 onPaste={onComposerPaste}
                 placeholder={
-                  isComposerApprovalState
-                    ? (activePendingApproval?.detail ?? "Resolve this approval request to continue")
-                    : activePendingProgress
+                  activePendingProgress
                     ? "Type your own answer, or leave this blank to use the selected option"
                     : showPlanFollowUpPrompt && activeProposedPlan
                       ? "Add feedback to refine the plan, or leave this blank to implement it"
@@ -3607,254 +3585,314 @@ export default function ChatView({ threadId }: ChatViewProps) {
                         ? "Ask for follow-up changes or attach images"
                         : "Ask anything, @tag files/folders, or use /model"
                 }
-                disabled={isConnecting || isComposerApprovalState}
+                disabled={isConnecting}
               />
             </div>
 
             {/* Bottom toolbar */}
-            {activePendingApproval ? (
-              <div className="flex items-center justify-end gap-2 px-2.5 pb-2.5 sm:px-3 sm:pb-3">
-                <ComposerPendingApprovalActions
-                  requestId={activePendingApproval.requestId}
-                  isResponding={respondingRequestIds.includes(activePendingApproval.requestId)}
-                  onRespondToApproval={onRespondToApproval}
-                />
-              </div>
-            ) : (
-              <div className="flex flex-wrap items-center justify-between gap-2 px-2.5 pb-2.5 sm:flex-nowrap sm:gap-0 sm:px-3 sm:pb-3">
-                <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:min-w-max sm:overflow-visible">
-                  {/* Provider/model picker */}
+            <div className="flex flex-wrap items-center justify-between gap-2 px-2.5 pb-2.5 sm:flex-nowrap sm:gap-0 sm:px-3 sm:pb-3">
+              <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:min-w-max sm:overflow-visible">
+                {/* Provider/model picker */}
+                {cursorModelSelectionLockedReason ? (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <span className="inline-flex">
+                          <ProviderModelPicker
+                            provider={selectedProvider}
+                            model={selectedModelForPickerWithCustomFallback}
+                            lockedProvider={lockedProvider}
+                            modelOptionsByProvider={modelOptionsByProvider}
+                            disabled
+                            onProviderModelChange={onProviderModelSelect}
+                          />
+                        </span>
+                      }
+                    />
+                    <TooltipPopup side="top" className="max-w-72 whitespace-normal leading-tight">
+                      {cursorModelSelectionLockedReason}
+                    </TooltipPopup>
+                  </Tooltip>
+                ) : (
                   <ProviderModelPicker
                     provider={selectedProvider}
                     model={selectedModelForPickerWithCustomFallback}
                     lockedProvider={lockedProvider}
                     modelOptionsByProvider={modelOptionsByProvider}
-                    serviceTierSetting={selectedServiceTierSetting}
                     onProviderModelChange={onProviderModelSelect}
                   />
+                )}
 
-                  {selectedProvider === "codex" && selectedEffort != null ? (
-                    <>
+                {selectedProvider === "cursor" ? (
+                  <>
+                    {hasSelectedCursorTraits && (
                       <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
-                      <CodexTraitsPicker
-                        effort={selectedEffort}
-                        fastModeEnabled={selectedCodexFastModeEnabled}
-                        options={reasoningOptions}
-                        onEffortChange={onEffortSelect}
-                        onFastModeChange={onCodexFastModeChange}
-                      />
-                    </>
-                  ) : null}
+                    )}
 
-                  {/* Divider */}
-                  <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
+                    {selectedCursorModel &&
+                      selectedCursorModelCapabilities &&
+                      hasSelectedCursorTraits && (
+                        <>
+                          {cursorModelSelectionLockedReason ? (
+                            <Tooltip>
+                              <TooltipTrigger
+                                render={
+                                  <span className="inline-flex">
+                                    <CursorTraitsPicker
+                                      selection={selectedCursorModel}
+                                      capabilities={selectedCursorModelCapabilities}
+                                      disabled
+                                      onReasoningChange={onCursorReasoningSelect}
+                                      onFastModeChange={onCursorFastModeChange}
+                                      onThinkingModeChange={onCursorThinkingModeChange}
+                                    />
+                                  </span>
+                                }
+                              />
+                              <TooltipPopup
+                                side="top"
+                                className="max-w-72 whitespace-normal leading-tight"
+                              >
+                                {cursorModelSelectionLockedReason}
+                              </TooltipPopup>
+                            </Tooltip>
+                          ) : (
+                            <CursorTraitsPicker
+                              selection={selectedCursorModel}
+                              capabilities={selectedCursorModelCapabilities}
+                              onReasoningChange={onCursorReasoningSelect}
+                              onFastModeChange={onCursorFastModeChange}
+                              onThinkingModeChange={onCursorThinkingModeChange}
+                            />
+                          )}
+                        </>
+                      )}
+                  </>
+                ) : selectedProvider === "codex" && selectedEffort != null ? (
+                  <>
+                    <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
+                    <CodexTraitsPicker
+                      effort={selectedEffort}
+                      fastModeEnabled={selectedCodexFastModeEnabled}
+                      options={reasoningOptions}
+                      onEffortChange={onEffortSelect}
+                      onFastModeChange={onCodexFastModeChange}
+                    />
+                  </>
+                ) : null}
 
-                  {/* Interaction mode toggle */}
-                  <Button
-                    variant="ghost"
-                    className="shrink-0 whitespace-nowrap px-2 text-muted-foreground/70 hover:text-foreground/80 sm:px-3"
-                    size="sm"
+                {/* Divider */}
+                <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
+
+                {/* Interaction mode toggle */}
+                <Button
+                  variant="ghost"
+                  className="shrink-0 whitespace-nowrap px-2 text-muted-foreground/70 hover:text-foreground/80 sm:px-3"
+                  size="sm"
+                  type="button"
+                  onClick={() =>
+                    void handleInteractionModeChange(
+                      interactionMode === "plan" ? "default" : "plan",
+                    )
+                  }
+                  title={
+                    interactionMode === "plan"
+                      ? "Plan mode — click to return to normal chat mode"
+                      : "Default mode — click to enter plan mode"
+                  }
+                >
+                  <BotIcon />
+                  <span className="sr-only sm:not-sr-only">
+                    {interactionMode === "plan" ? "Plan" : "Chat"}
+                  </span>
+                </Button>
+
+                {/* Divider */}
+                <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
+
+                {/* Runtime mode toggle */}
+                <Button
+                  variant="ghost"
+                  className="shrink-0 whitespace-nowrap px-2 text-muted-foreground/70 hover:text-foreground/80 sm:px-3"
+                  size="sm"
+                  type="button"
+                  onClick={() =>
+                    void handleRuntimeModeChange(
+                      runtimeMode === "full-access" ? "approval-required" : "full-access",
+                    )
+                  }
+                  title={
+                    runtimeMode === "full-access"
+                      ? "Full access — click to require approvals"
+                      : "Approval required — click for full access"
+                  }
+                >
+                  {runtimeMode === "full-access" ? <LockOpenIcon /> : <LockIcon />}
+                  <span className="sr-only sm:not-sr-only">
+                    {runtimeMode === "full-access" ? "Full access" : "Supervised"}
+                  </span>
+                </Button>
+              </div>
+
+              {/* Right side: send / stop button */}
+              <div className="flex shrink-0 items-center gap-2">
+                {isPreparingWorktree ? (
+                  <span className="text-muted-foreground/70 text-xs">Preparing worktree...</span>
+                ) : null}
+                {activePendingProgress ? (
+                  <div className="flex items-center gap-2">
+                    {activePendingProgress.questionIndex > 0 ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="rounded-full"
+                        onClick={onPreviousActivePendingUserInputQuestion}
+                        disabled={activePendingIsResponding}
+                      >
+                        Previous
+                      </Button>
+                    ) : null}
+                    <Button
+                      type="submit"
+                      size="sm"
+                      className="rounded-full px-4"
+                      disabled={
+                        activePendingIsResponding ||
+                        (activePendingProgress.isLastQuestion
+                          ? !activePendingResolvedAnswers
+                          : !activePendingProgress.canAdvance)
+                      }
+                    >
+                      {activePendingIsResponding
+                        ? "Submitting..."
+                        : activePendingProgress.isLastQuestion
+                          ? "Submit answers"
+                          : "Next question"}
+                    </Button>
+                  </div>
+                ) : phase === "running" ? (
+                  <button
                     type="button"
-                    onClick={toggleInteractionMode}
-                    title={
-                      interactionMode === "plan"
-                        ? "Plan mode — click to return to normal chat mode"
-                        : "Default mode — click to enter plan mode"
-                    }
+                    className="flex size-8 items-center justify-center rounded-full bg-rose-500/90 text-white transition-all duration-150 hover:bg-rose-500 hover:scale-105 sm:h-8 sm:w-8"
+                    onClick={() => void onInterrupt()}
+                    aria-label="Stop generation"
                   >
-                    <BotIcon />
-                    <span className="sr-only sm:not-sr-only">
-                      {interactionMode === "plan" ? "Plan" : "Chat"}
-                    </span>
-                  </Button>
-
-                  {/* Divider */}
-                  <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
-
-                  {/* Runtime mode toggle */}
-                  <Button
-                    variant="ghost"
-                    className="shrink-0 whitespace-nowrap px-2 text-muted-foreground/70 hover:text-foreground/80 sm:px-3"
-                    size="sm"
-                    type="button"
-                    onClick={() =>
-                      void handleRuntimeModeChange(
-                        runtimeMode === "full-access" ? "approval-required" : "full-access",
-                      )
-                    }
-                    title={
-                      runtimeMode === "full-access"
-                        ? "Full access — click to require approvals"
-                        : "Approval required — click for full access"
-                    }
-                  >
-                    {runtimeMode === "full-access" ? <LockOpenIcon /> : <LockIcon />}
-                    <span className="sr-only sm:not-sr-only">
-                      {runtimeMode === "full-access" ? "Full access" : "Supervised"}
-                    </span>
-                  </Button>
-                </div>
-
-                {/* Right side: send / stop button */}
-                <div className="flex shrink-0 items-center gap-2">
-                  {isPreparingWorktree ? (
-                    <span className="text-muted-foreground/70 text-xs">Preparing worktree...</span>
-                  ) : null}
-                  {activePendingProgress ? (
-                    <div className="flex items-center gap-2">
-                      {activePendingProgress.questionIndex > 0 ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="rounded-full"
-                          onClick={onPreviousActivePendingUserInputQuestion}
-                          disabled={activePendingIsResponding}
-                        >
-                          Previous
-                        </Button>
-                      ) : null}
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 12 12"
+                      fill="currentColor"
+                      aria-hidden="true"
+                    >
+                      <rect x="2" y="2" width="8" height="8" rx="1.5" />
+                    </svg>
+                  </button>
+                ) : pendingUserInputs.length === 0 ? (
+                  showPlanFollowUpPrompt ? (
+                    prompt.trim().length > 0 ? (
                       <Button
                         type="submit"
                         size="sm"
-                        className="rounded-full px-4"
-                        disabled={
-                          activePendingIsResponding ||
-                          (activePendingProgress.isLastQuestion
-                            ? !activePendingResolvedAnswers
-                            : !activePendingProgress.canAdvance)
-                        }
+                        className="h-9 rounded-full px-4 sm:h-8"
+                        disabled={isSendBusy || isConnecting}
                       >
-                        {activePendingIsResponding
-                          ? "Submitting..."
-                          : activePendingProgress.isLastQuestion
-                            ? "Submit answers"
-                            : "Next question"}
+                        {isConnecting || isSendBusy ? "Sending..." : "Refine"}
                       </Button>
-                    </div>
-                  ) : phase === "running" ? (
-                    <button
-                      type="button"
-                      className="flex size-8 items-center justify-center rounded-full bg-rose-500/90 text-white transition-all duration-150 hover:bg-rose-500 hover:scale-105 sm:h-8 sm:w-8"
-                      onClick={() => void onInterrupt()}
-                      aria-label="Stop generation"
-                    >
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 12 12"
-                        fill="currentColor"
-                        aria-hidden="true"
-                      >
-                        <rect x="2" y="2" width="8" height="8" rx="1.5" />
-                      </svg>
-                    </button>
-                  ) : pendingUserInputs.length === 0 ? (
-                    showPlanFollowUpPrompt ? (
-                      prompt.trim().length > 0 ? (
+                    ) : (
+                      <div className="flex items-center">
                         <Button
                           type="submit"
                           size="sm"
-                          className="h-9 rounded-full px-4 sm:h-8"
+                          className="h-9 rounded-l-full rounded-r-none px-4 sm:h-8"
                           disabled={isSendBusy || isConnecting}
                         >
-                          {isConnecting || isSendBusy ? "Sending..." : "Refine"}
+                          {isConnecting || isSendBusy ? "Sending..." : "Implement"}
                         </Button>
-                      ) : (
-                        <div className="flex items-center">
-                          <Button
-                            type="submit"
-                            size="sm"
-                            className="h-9 rounded-l-full rounded-r-none px-4 sm:h-8"
-                            disabled={isSendBusy || isConnecting}
-                          >
-                            {isConnecting || isSendBusy ? "Sending..." : "Implement"}
-                          </Button>
-                          <Menu>
-                            <MenuTrigger
-                              render={
-                                <Button
-                                  size="sm"
-                                  variant="default"
-                                  className="h-9 rounded-l-none rounded-r-full border-l-white/12 px-2 sm:h-8"
-                                  aria-label="Implementation actions"
-                                  disabled={isSendBusy || isConnecting}
-                                />
-                              }
-                            >
-                              <ChevronDownIcon className="size-3.5" />
-                            </MenuTrigger>
-                            <MenuPopup align="end" side="top">
-                              <MenuItem
+                        <Menu>
+                          <MenuTrigger
+                            render={
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="h-9 rounded-l-none rounded-r-full border-l-white/12 px-2 sm:h-8"
+                                aria-label="Implementation actions"
                                 disabled={isSendBusy || isConnecting}
-                                onClick={() => void onImplementPlanInNewThread()}
-                              >
-                                Implement in new thread
-                              </MenuItem>
-                            </MenuPopup>
-                          </Menu>
-                        </div>
-                      )
-                    ) : (
-                      <button
-                        type="submit"
-                        className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/90 text-primary-foreground transition-all duration-150 hover:bg-primary hover:scale-105 disabled:opacity-30 disabled:hover:scale-100 sm:h-8 sm:w-8"
-                        disabled={
-                          isSendBusy ||
-                          isConnecting ||
-                          (!prompt.trim() && composerImages.length === 0)
-                        }
-                        aria-label={
-                          isConnecting
-                            ? "Connecting"
-                            : isPreparingWorktree
-                              ? "Preparing worktree"
-                              : isSendBusy
-                                ? "Sending"
-                                : "Send message"
-                        }
-                      >
-                        {isConnecting || isSendBusy ? (
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 14 14"
-                            fill="none"
-                            className="animate-spin"
-                            aria-hidden="true"
+                              />
+                            }
                           >
-                            <circle
-                              cx="7"
-                              cy="7"
-                              r="5.5"
-                              stroke="currentColor"
-                              strokeWidth="1.5"
-                              strokeLinecap="round"
-                              strokeDasharray="20 12"
-                            />
-                          </svg>
-                        ) : (
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 14 14"
-                            fill="none"
-                            aria-hidden="true"
-                          >
-                            <path
-                              d="M7 11.5V2.5M7 2.5L3 6.5M7 2.5L11 6.5"
-                              stroke="currentColor"
-                              strokeWidth="1.8"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        )}
-                      </button>
+                            <ChevronDownIcon className="size-3.5" />
+                          </MenuTrigger>
+                          <MenuPopup align="end" side="top">
+                            <MenuItem
+                              disabled={isSendBusy || isConnecting}
+                              onClick={() => void onImplementPlanInNewThread()}
+                            >
+                              Implement in new thread
+                            </MenuItem>
+                          </MenuPopup>
+                        </Menu>
+                      </div>
                     )
-                  ) : null}
-                </div>
+                  ) : (
+                    <button
+                      type="submit"
+                      className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/90 text-primary-foreground transition-all duration-150 hover:bg-primary hover:scale-105 disabled:opacity-30 disabled:hover:scale-100 sm:h-8 sm:w-8"
+                      disabled={
+                        isSendBusy ||
+                        isConnecting ||
+                        (!prompt.trim() && composerImages.length === 0)
+                      }
+                      aria-label={
+                        isConnecting
+                          ? "Connecting"
+                          : isPreparingWorktree
+                            ? "Preparing worktree"
+                            : isSendBusy
+                              ? "Sending"
+                              : "Send message"
+                      }
+                    >
+                      {isConnecting || isSendBusy ? (
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 14 14"
+                          fill="none"
+                          className="animate-spin"
+                          aria-hidden="true"
+                        >
+                          <circle
+                            cx="7"
+                            cy="7"
+                            r="5.5"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeDasharray="20 12"
+                          />
+                        </svg>
+                      ) : (
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 14 14"
+                          fill="none"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M7 11.5V2.5M7 2.5L3 6.5M7 2.5L11 6.5"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      )}
+                    </button>
+                  )
+                ) : null}
               </div>
-            )}
+            </div>
           </div>
         </form>
       </div>
@@ -3971,8 +4009,6 @@ interface ChatHeaderProps {
   activeThreadId: ThreadId;
   activeThreadTitle: string;
   activeProjectName: string | undefined;
-  isGitRepo: boolean;
-  openInCwd: string | null;
   activeProjectScripts: ProjectScript[] | undefined;
   preferredScriptId: string | null;
   keybindings: ResolvedKeybindingsConfig;
@@ -3990,8 +4026,6 @@ const ChatHeader = memo(function ChatHeader({
   activeThreadId,
   activeThreadTitle,
   activeProjectName,
-  isGitRepo,
-  openInCwd,
   activeProjectScripts,
   preferredScriptId,
   keybindings,
@@ -4019,11 +4053,6 @@ const ChatHeader = memo(function ChatHeader({
             {activeProjectName}
           </Badge>
         )}
-        {activeProjectName && !isGitRepo && (
-          <Badge variant="outline" className="shrink-0 text-[10px] text-amber-700">
-            No Git
-          </Badge>
-        )}
       </div>
       <div className="@container/header-actions flex min-w-0 flex-1 items-center justify-end gap-2 @sm/header-actions:gap-3">
         {activeProjectScripts && (
@@ -4040,7 +4069,7 @@ const ChatHeader = memo(function ChatHeader({
           <OpenInPicker
             keybindings={keybindings}
             availableEditors={availableEditors}
-            openInCwd={openInCwd}
+            activeThreadId={activeThreadId}
           />
         )}
         {activeProjectName && <GitActionsControl gitCwd={gitCwd} activeThreadId={activeThreadId} />}
@@ -4054,18 +4083,15 @@ const ChatHeader = memo(function ChatHeader({
                 aria-label="Toggle diff panel"
                 variant="outline"
                 size="xs"
-                disabled={!isGitRepo}
               >
                 <DiffIcon className="size-3" />
               </Toggle>
             }
           />
           <TooltipPopup side="bottom">
-            {!isGitRepo
-              ? "Diff panel is unavailable because this project is not a git repository."
-              : diffToggleShortcutLabel
-                ? `Toggle diff panel (${diffToggleShortcutLabel})`
-                : "Toggle diff panel"}
+            {diffToggleShortcutLabel
+              ? `Toggle diff panel (${diffToggleShortcutLabel})`
+              : "Toggle diff panel"}
           </TooltipPopup>
         </Tooltip>
       </div>
@@ -4116,84 +4142,80 @@ const ProviderHealthBanner = memo(function ProviderHealthBanner({
   );
 });
 
-interface ComposerPendingApprovalPanelProps {
-  approval: PendingApproval;
-  pendingCount: number;
-}
-
-const ComposerPendingApprovalPanel = memo(function ComposerPendingApprovalPanel({
-  approval,
-  pendingCount,
-}: ComposerPendingApprovalPanelProps) {
-  const approvalSummary =
-    approval.requestKind === "command"
-      ? "Command approval requested"
-      : approval.requestKind === "file-read"
-        ? "File-read approval requested"
-        : "File-change approval requested";
-
-  return (
-    <div className="px-4 py-3.5 sm:px-5 sm:py-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="uppercase text-sm tracking-[0.2em]">PENDING APPROVAL</span>
-        <span className="text-sm font-medium">{approvalSummary}</span>
-        {pendingCount > 1 ? (
-          <span className="text-xs text-muted-foreground">1/{pendingCount}</span>
-        ) : null}
-      </div>
-    </div>
-  );
-});
-
-interface ComposerPendingApprovalActionsProps {
-  requestId: ApprovalRequestId;
-  isResponding: boolean;
+interface PendingApprovalsPanelProps {
+  pendingApprovals: PendingApproval[];
+  respondingRequestIds: ApprovalRequestId[];
   onRespondToApproval: (
     requestId: ApprovalRequestId,
     decision: ProviderApprovalDecision,
   ) => Promise<void>;
 }
 
-const ComposerPendingApprovalActions = memo(function ComposerPendingApprovalActions({
-  requestId,
-  isResponding,
+const PendingApprovalsPanel = memo(function PendingApprovalsPanel({
+  pendingApprovals,
+  respondingRequestIds,
   onRespondToApproval,
-}: ComposerPendingApprovalActionsProps) {
+}: PendingApprovalsPanelProps) {
+  if (pendingApprovals.length === 0) return null;
   return (
-    <>
-      <Button
-        size="sm"
-        variant="ghost"
-        disabled={isResponding}
-        onClick={() => void onRespondToApproval(requestId, "cancel")}
-      >
-        Cancel turn
-      </Button>
-      <Button
-        size="sm"
-        variant="destructive-outline"
-        disabled={isResponding}
-        onClick={() => void onRespondToApproval(requestId, "decline")}
-      >
-        Decline
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={isResponding}
-        onClick={() => void onRespondToApproval(requestId, "acceptForSession")}
-      >
-        Always allow this session
-      </Button>
-      <Button
-        size="sm"
-        variant="default"
-        disabled={isResponding}
-        onClick={() => void onRespondToApproval(requestId, "accept")}
-      >
-        Approve once
-      </Button>
-    </>
+    <div className="pt-3 mx-auto max-w-3xl space-y-2">
+      {pendingApprovals.map((approval) => {
+        const isResponding = respondingRequestIds.includes(approval.requestId);
+
+        return (
+          <Alert variant="warning" key={approval.requestId}>
+            <InfoIcon />
+            <AlertTitle className="text-xs">
+              {approval.requestKind === "command"
+                ? "Command approval requested"
+                : approval.requestKind === "file-read"
+                  ? "File-read approval requested"
+                  : "File-change approval requested"}
+            </AlertTitle>
+            <AlertDescription
+              className="truncate block font-mono text-[11px]"
+              title={approval.detail}
+            >
+              {approval.detail}
+            </AlertDescription>
+            <AlertAction className="col-start-2! -col-end-1! mt-1.5 sm:row-start-auto sm:row-end-auto">
+              <Button
+                size="xs"
+                variant="default"
+                disabled={isResponding}
+                onClick={() => void onRespondToApproval(approval.requestId, "accept")}
+              >
+                Approve once
+              </Button>
+              <Button
+                size="xs"
+                variant="outline"
+                disabled={isResponding}
+                onClick={() => void onRespondToApproval(approval.requestId, "acceptForSession")}
+              >
+                Always allow this session
+              </Button>
+              <Button
+                size="xs"
+                variant="destructive-outline"
+                disabled={isResponding}
+                onClick={() => void onRespondToApproval(approval.requestId, "decline")}
+              >
+                Decline
+              </Button>
+              <Button
+                size="xs"
+                variant="ghost"
+                disabled={isResponding}
+                onClick={() => void onRespondToApproval(approval.requestId, "cancel")}
+              >
+                Cancel turn
+              </Button>
+            </AlertAction>
+          </Alert>
+        );
+      })}
+    </div>
   );
 });
 
@@ -4997,43 +5019,23 @@ const MessagesTimeline = memo(function MessagesTimeline({
                 {visibleEntries.map((workEntry) => (
                   <div key={`work-row:${workEntry.id}`} className="flex items-start gap-2 py-0.5">
                     <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/30" />
-                    <div className="min-w-0 flex-1 py-[2px]">
-                      <p className={`text-[11px] leading-relaxed ${workToneClass(workEntry.tone)}`}>
-                        {workEntry.label}
-                      </p>
-                      {workEntry.command && (
-                        <pre className="mt-1 overflow-x-auto rounded-md border border-border/70 bg-background/80 px-2 py-1 font-mono text-[11px] leading-relaxed text-foreground/80">
-                          {workEntry.command}
-                        </pre>
-                      )}
-                      {workEntry.changedFiles && workEntry.changedFiles.length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {workEntry.changedFiles.slice(0, 6).map((filePath) => (
-                            <span
-                              key={`${workEntry.id}:${filePath}`}
-                              className="rounded-md border border-border/70 bg-background/65 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground/85"
-                              title={filePath}
-                            >
-                              {filePath}
-                            </span>
-                          ))}
-                          {workEntry.changedFiles.length > 6 && (
-                            <span className="px-1 text-[10px] text-muted-foreground/65">
-                              +{workEntry.changedFiles.length - 6} more
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      {workEntry.detail &&
-                        (!workEntry.command || workEntry.detail !== workEntry.command) && (
-                          <p
-                            className="mt-1 text-[11px] leading-relaxed text-muted-foreground/75"
+                    <p
+                      className={`py-[2px] text-[11px] leading-relaxed ${workToneClass(workEntry.tone)}`}
+                    >
+                      {workEntry.detail ? (
+                        <>
+                          {workEntry.label}
+                          <span
+                            className="ml-1.5 inline-block max-w-[70ch] truncate align-bottom font-mono text-[11px] opacity-60"
                             title={workEntry.detail}
                           >
                             {workEntry.detail}
-                          </p>
-                        )}
-                    </div>
+                          </span>
+                        </>
+                      ) : (
+                        workEntry.label
+                      )}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -5219,16 +5221,11 @@ const MessagesTimeline = memo(function MessagesTimeline({
       {row.kind === "working" && (
         <div className="flex items-center gap-2 py-0.5 pl-1.5">
           <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/30" />
-          <div className="flex items-center gap-2 pt-1 text-[11px] text-muted-foreground/70">
+          <div className="flex items-center pt-1">
             <span className="inline-flex items-center gap-[3px]">
               <span className="h-1 w-1 rounded-full bg-muted-foreground/30 animate-pulse" />
               <span className="h-1 w-1 rounded-full bg-muted-foreground/30 animate-pulse [animation-delay:200ms]" />
               <span className="h-1 w-1 rounded-full bg-muted-foreground/30 animate-pulse [animation-delay:400ms]" />
-            </span>
-            <span>
-              {row.createdAt
-                ? `Working for ${formatWorkingTimer(row.createdAt, nowIso) ?? "0s"}`
-                : "Working..."}
             </span>
           </div>
         </div>
@@ -5280,7 +5277,9 @@ const MessagesTimeline = memo(function MessagesTimeline({
   );
 });
 
-function isAvailableProviderOption(option: (typeof PROVIDER_OPTIONS)[number]): option is {
+function isAvailableProviderOption(
+  option: (typeof PROVIDER_OPTIONS)[number],
+): option is {
   value: ProviderKind;
   label: string;
   available: true;
@@ -5297,13 +5296,24 @@ const COMING_SOON_PROVIDER_OPTIONS = [
 
 function getCustomModelOptionsByProvider(settings: {
   customCodexModels: readonly string[];
+  customClaudeModels: readonly string[];
+  customCursorModels: readonly string[];
 }): Record<ProviderKind, ReadonlyArray<{ slug: string; name: string }>> {
+  const cursorFamilyOptions = getCursorModelFamilyOptions();
   return {
     codex: getAppModelOptions("codex", settings.customCodexModels),
+    claudeCode: getAppModelOptions("claudeCode", settings.customClaudeModels),
+    cursor: [
+      ...cursorFamilyOptions,
+      ...getAppModelOptions("cursor", settings.customCursorModels).filter(
+        (option) =>
+          option.isCustom && !cursorFamilyOptions.some((family) => family.slug === option.slug),
+      ),
+    ],
   };
 }
 
-const PROVIDER_ICON_BY_PROVIDER: Record<ProviderPickerKind, Icon> = {
+const PROVIDER_ICON_BY_PROVIDER: Record<ProviderKind, Icon> = {
   codex: OpenAI,
   claudeCode: ClaudeAI,
   cursor: CursorIcon,
@@ -5339,6 +5349,10 @@ function resolveModelForProviderPicker(
     return resolved.slug;
   }
 
+  if (provider === "cursor") {
+    return parseCursorModelSelection(normalized).family;
+  }
+
   return null;
 }
 
@@ -5347,7 +5361,6 @@ const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   model: ModelSlug;
   lockedProvider: ProviderKind | null;
   modelOptionsByProvider: Record<ProviderKind, ReadonlyArray<{ slug: string; name: string }>>;
-  serviceTierSetting: AppServiceTier;
   disabled?: boolean;
   onProviderModelChange: (provider: ProviderKind, model: ModelSlug) => void;
 }) {
@@ -5379,10 +5392,13 @@ const ProviderModelPicker = memo(function ProviderModelPicker(props: {
         }
       >
         <span className="flex min-w-0 items-center gap-2">
-          <ProviderIcon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground/70" />
-          {props.provider === "codex" && shouldShowFastTierIcon(props.model, props.serviceTierSetting) ? (
-            <ZapIcon className="size-3.5 shrink-0 text-amber-500" />
-          ) : null}
+          <ProviderIcon
+            aria-hidden="true"
+            className={cn(
+              "size-4 shrink-0",
+              props.provider === "claudeCode" ? "" : "text-muted-foreground/70",
+            )}
+          />
           <span className="truncate">{selectedModelLabel}</span>
           <ChevronDownIcon aria-hidden="true" className="size-3 opacity-60" />
         </span>
@@ -5425,10 +5441,6 @@ const ProviderModelPicker = memo(function ProviderModelPicker(props: {
                         value={modelOption.slug}
                         onClick={() => setIsMenuOpen(false)}
                       >
-                        {option.value === "codex" &&
-                        shouldShowFastTierIcon(modelOption.slug, props.serviceTierSetting) ? (
-                          <ZapIcon className="size-3.5 shrink-0 text-amber-500" />
-                        ) : null}
                         {modelOption.name}
                       </MenuRadioItem>
                     ))}
@@ -5554,14 +5566,125 @@ const CodexTraitsPicker = memo(function CodexTraitsPicker(props: {
   );
 });
 
+const CursorTraitsPicker = memo(function CursorTraitsPicker(props: {
+  selection: ReturnType<typeof parseCursorModelSelection>;
+  capabilities: ReturnType<typeof getCursorModelCapabilities>;
+  disabled?: boolean;
+  onReasoningChange: (reasoning: CursorReasoningOption) => void;
+  onFastModeChange: (enabled: boolean) => void;
+  onThinkingModeChange: (enabled: boolean) => void;
+}) {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const reasoningLabelByOption: Record<CursorReasoningOption, string> = {
+    low: "Low",
+    normal: "Normal",
+    high: "High",
+    xhigh: "Extra High",
+  };
+  const traitSummary = [
+    ...(props.capabilities.supportsReasoning
+      ? [reasoningLabelByOption[props.selection.reasoning]]
+      : []),
+    ...(props.capabilities.supportsFast && props.selection.fast ? ["Fast"] : []),
+    ...(props.capabilities.supportsThinking && props.selection.thinking ? ["Thinking"] : []),
+  ];
+  const triggerLabel = traitSummary.length > 0 ? traitSummary.join(" · ") : "Traits";
+
+  return (
+    <Menu
+      open={isMenuOpen}
+      onOpenChange={(open) => {
+        if (props.disabled) {
+          setIsMenuOpen(false);
+          return;
+        }
+        setIsMenuOpen(open);
+      }}
+    >
+      <MenuTrigger
+        render={
+          <Button
+            size="sm"
+            variant="ghost"
+            className="shrink-0 whitespace-nowrap px-2 text-muted-foreground/70 hover:text-foreground/80 sm:px-3"
+            disabled={props.disabled}
+          />
+        }
+      >
+        <span>{triggerLabel}</span>
+        <ChevronDownIcon aria-hidden="true" className="size-3 opacity-60" />
+      </MenuTrigger>
+      <MenuPopup align="start">
+        {props.capabilities.supportsReasoning && (
+          <MenuGroup>
+            <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Reasoning</div>
+            <MenuRadioGroup
+              value={props.selection.reasoning}
+              onValueChange={(value) => {
+                if (props.disabled) return;
+                if (!value) return;
+                const nextReasoning = CURSOR_REASONING_OPTIONS.find((option) => option === value);
+                if (!nextReasoning) return;
+                props.onReasoningChange(nextReasoning);
+              }}
+            >
+              {CURSOR_REASONING_OPTIONS.map((reasoning) => (
+                <MenuRadioItem key={reasoning} value={reasoning}>
+                  {reasoning}
+                  {reasoning === "normal" ? " (default)" : ""}
+                </MenuRadioItem>
+              ))}
+            </MenuRadioGroup>
+          </MenuGroup>
+        )}
+        {props.capabilities.supportsReasoning &&
+          (props.capabilities.supportsFast || props.capabilities.supportsThinking) && (
+            <MenuDivider />
+          )}
+        {props.capabilities.supportsFast && (
+          <MenuGroup>
+            <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Fast Mode</div>
+            <MenuRadioGroup
+              value={props.selection.fast ? "on" : "off"}
+              onValueChange={(value) => {
+                if (props.disabled) return;
+                props.onFastModeChange(value === "on");
+              }}
+            >
+              <MenuRadioItem value="off">off</MenuRadioItem>
+              <MenuRadioItem value="on">on</MenuRadioItem>
+            </MenuRadioGroup>
+          </MenuGroup>
+        )}
+        {props.capabilities.supportsFast && props.capabilities.supportsThinking && <MenuDivider />}
+        {props.capabilities.supportsThinking && (
+          <MenuGroup>
+            <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Thinking</div>
+            <MenuRadioGroup
+              value={props.selection.thinking ? "on" : "off"}
+              onValueChange={(value) => {
+                if (props.disabled) return;
+                props.onThinkingModeChange(value === "on");
+              }}
+            >
+              <MenuRadioItem value="off">off</MenuRadioItem>
+              <MenuRadioItem value="on">on</MenuRadioItem>
+            </MenuRadioGroup>
+          </MenuGroup>
+        )}
+      </MenuPopup>
+    </Menu>
+  );
+});
+
 const OpenInPicker = memo(function OpenInPicker({
   keybindings,
   availableEditors,
-  openInCwd,
+  activeThreadId,
 }: {
   keybindings: ResolvedKeybindingsConfig;
   availableEditors: ReadonlyArray<EditorId>;
-  openInCwd: string | null;
+  activeThreadId: ThreadId | null;
 }) {
   const [lastEditor, setLastEditor] = useState<EditorId>(() => {
     const stored = localStorage.getItem(LAST_EDITOR_KEY);
@@ -5607,17 +5730,26 @@ const OpenInPicker = memo(function OpenInPicker({
     : (options[0]?.value ?? null);
   const primaryOption = options.find(({ value }) => value === effectiveEditor) ?? null;
 
+  const activeThread = useStore((store) =>
+    activeThreadId ? store.threads.find((thread) => thread.id === activeThreadId) : undefined,
+  );
+  const activeProjectId = activeThread?.projectId ?? null;
+  const activeProject = useStore((store) =>
+    activeProjectId ? store.projects.find((project) => project.id === activeProjectId) : undefined,
+  );
+
   const openInEditor = useCallback(
     (editorId: EditorId | null) => {
       const api = readNativeApi();
-      if (!api || !openInCwd) return;
+      if (!api || !activeProject) return;
       const editor = editorId ?? effectiveEditor;
       if (!editor) return;
-      void api.shell.openInEditor(openInCwd, editor);
+      const cwd = activeThread?.worktreePath ?? activeProject.cwd;
+      void api.shell.openInEditor(cwd, editor);
       localStorage.setItem(LAST_EDITOR_KEY, editor);
       setLastEditor(editor);
     },
-    [effectiveEditor, openInCwd, setLastEditor],
+    [activeProject, activeThread, effectiveEditor, setLastEditor],
   );
 
   const openFavoriteEditorShortcutLabel = useMemo(
@@ -5629,22 +5761,23 @@ const OpenInPicker = memo(function OpenInPicker({
     const handler = (e: globalThis.KeyboardEvent) => {
       const api = readNativeApi();
       if (!isOpenFavoriteEditorShortcut(e, keybindings)) return;
-      if (!api || !openInCwd) return;
+      if (!api || !activeProject) return;
       if (!effectiveEditor) return;
 
       e.preventDefault();
-      void api.shell.openInEditor(openInCwd, effectiveEditor);
+      const cwd = activeThread?.worktreePath ?? activeProject.cwd;
+      void api.shell.openInEditor(cwd, effectiveEditor);
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [effectiveEditor, keybindings, openInCwd]);
+  }, [activeProject, activeThread, keybindings, effectiveEditor]);
 
   return (
     <Group aria-label="Subscription actions">
       <Button
         size="xs"
         variant="outline"
-        disabled={!effectiveEditor || !openInCwd}
+        disabled={!effectiveEditor || !activeProject}
         onClick={() => openInEditor(effectiveEditor)}
       >
         {primaryOption?.Icon && <primaryOption.Icon aria-hidden="true" className="size-3.5" />}

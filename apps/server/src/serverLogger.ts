@@ -1,15 +1,18 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { Effect, Logger } from "effect";
+import { Effect, Logger, Option } from "effect";
 import * as Layer from "effect/Layer";
 
 import { ServerConfig } from "./config";
 
 export const ServerLoggerLive = Effect.gen(function* () {
-  const config = yield* ServerConfig;
+  const config = yield* Effect.serviceOption(ServerConfig);
+  if (Option.isNone(config)) {
+    return Logger.layer([Logger.defaultLogger]);
+  }
 
-  const logDir = path.join(config.stateDir, "logs");
+  const logDir = path.join(config.value.stateDir, "logs");
   const logPath = path.join(logDir, "server.log");
 
   yield* Effect.sync(() => {

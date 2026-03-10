@@ -9,6 +9,8 @@
 import { Config, Data, Effect, FileSystem, Layer, Option, Path, Schema, ServiceMap } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
 import { NetService } from "@t3tools/shared/Net";
+
+// Dummy comment.
 import {
   DEFAULT_PORT,
   resolveStaticDir,
@@ -198,9 +200,9 @@ const LayerLive = (input: CliInput) =>
     Layer.provideMerge(makeServerRuntimeServicesLayer()),
     Layer.provideMerge(makeServerProviderLayer()),
     Layer.provideMerge(ProviderHealthLive),
+    Layer.provideMerge(AnalyticsServiceLayerLive),
     Layer.provideMerge(SqlitePersistence.layerConfig),
     Layer.provideMerge(ServerLoggerLive),
-    Layer.provideMerge(AnalyticsServiceLayerLive),
     Layer.provideMerge(ServerConfigLive(input)),
   );
 

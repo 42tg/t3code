@@ -133,36 +133,6 @@ it.layer(makeDirectoryLayer(SqlitePersistenceMemory))("ProviderSessionDirectoryL
       }
     }));
 
-  it("resets adapterKey to the new provider when provider changes without an explicit adapter key", () =>
-    Effect.gen(function* () {
-      const directory = yield* ProviderSessionDirectory;
-      const runtimeRepository = yield* ProviderSessionRuntimeRepository;
-      const threadId = ThreadId.makeUnsafe("thread-provider-change");
-
-      yield* runtimeRepository.upsert({
-        threadId,
-        providerName: "cursor",
-        adapterKey: "cursor",
-        runtimeMode: "full-access",
-        status: "running",
-        lastSeenAt: new Date().toISOString(),
-        resumeCursor: null,
-        runtimePayload: null,
-      });
-
-      yield* directory.upsert({
-        provider: "codex",
-        threadId,
-      });
-
-      const runtime = yield* runtimeRepository.getByThreadId({ threadId });
-      assert.equal(Option.isSome(runtime), true);
-      if (Option.isSome(runtime)) {
-        assert.equal(runtime.value.providerName, "codex");
-        assert.equal(runtime.value.adapterKey, "codex");
-      }
-    }));
-
   it("rehydrates persisted mappings across layer restart", () =>
     Effect.gen(function* () {
       const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "t3-provider-directory-"));
@@ -203,5 +173,27 @@ it.layer(makeDirectoryLayer(SqlitePersistenceMemory))("ProviderSessionDirectoryL
       }).pipe(Effect.provide(directoryLayer));
 
       fs.rmSync(tempDir, { recursive: true, force: true });
+    }));
+
+  it("accepts cursor provider bindings", () =>
+    Effect.gen(function* () {
+      const directory = yield* ProviderSessionDirectory;
+      const threadId = ThreadId.makeUnsafe("thread-cursor");
+
+      yield* directory.upsert({
+        provider: "cursor",
+        threadId,
+      });
+
+      const provider = yield* directory.getProvider(threadId);
+      assert.equal(provider, "cursor");
+      const resolvedBinding = yield* directory.getBinding(threadId);
+      assertSome(resolvedBinding, {
+        threadId,
+        provider: "cursor",
+      });
+      if (Option.isSome(resolvedBinding)) {
+        assert.equal(resolvedBinding.value.threadId, threadId);
+      }
     }));
 });

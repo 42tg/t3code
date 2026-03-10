@@ -3,14 +3,18 @@ import { Schema } from "effect";
 
 import { ProviderRuntimeEvent } from "./providerRuntime";
 
-const decodeRuntimeEvent = Schema.decodeUnknownSync(ProviderRuntimeEvent);
+function decodeSync<S extends Schema.Top>(schema: S, input: unknown): Schema.Schema.Type<S> {
+  return Schema.decodeUnknownSync(schema as never)(input) as Schema.Schema.Type<S>;
+}
+
+const decodeRuntimeEvent = (input: unknown) => decodeSync(ProviderRuntimeEvent, input);
 
 describe("ProviderRuntimeEvent", () => {
   it("decodes turn.plan.updated for plan rendering", () => {
     const parsed = decodeRuntimeEvent({
       type: "turn.plan.updated",
       eventId: "event-1",
-      provider: "codex",
+      provider: "claudeCode",
       sessionId: "runtime-session-1",
       createdAt: "2026-02-28T00:00:00.000Z",
       threadId: "thread-1",
@@ -56,7 +60,7 @@ describe("ProviderRuntimeEvent", () => {
     const parsed = decodeRuntimeEvent({
       type: "user-input.requested",
       eventId: "event-2",
-      provider: "codex",
+      provider: "claudeCode",
       sessionId: "runtime-session-2",
       createdAt: "2026-02-28T00:00:01.000Z",
       threadId: "thread-2",
@@ -94,7 +98,7 @@ describe("ProviderRuntimeEvent", () => {
     const parsed = decodeRuntimeEvent({
       type: "user-input.resolved",
       eventId: "event-3",
-      provider: "codex",
+      provider: "claudeCode",
       sessionId: "runtime-session-2",
       createdAt: "2026-02-28T00:00:02.000Z",
       threadId: "thread-2",

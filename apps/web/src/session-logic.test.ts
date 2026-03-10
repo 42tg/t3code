@@ -2,7 +2,6 @@ import { EventId, MessageId, TurnId, type OrchestrationThreadActivity } from "@t
 import { describe, expect, it } from "vitest";
 
 import {
-  deriveActiveWorkStartedAt,
   deriveActivePlanState,
   PROVIDER_OPTIONS,
   derivePendingApprovals,
@@ -431,54 +430,6 @@ describe("deriveWorkLogEntries", () => {
     const entries = deriveWorkLogEntries(activities, undefined);
     expect(entries.map((entry) => entry.id)).toEqual(["first", "second"]);
   });
-
-  it("extracts command text for command tool activities", () => {
-    const activities: OrchestrationThreadActivity[] = [
-      makeActivity({
-        id: "command-tool",
-        kind: "tool.completed",
-        summary: "Command run complete",
-        payload: {
-          itemType: "command_execution",
-          data: {
-            item: {
-              command: ["bun", "run", "lint"],
-            },
-          },
-        },
-      }),
-    ];
-
-    const [entry] = deriveWorkLogEntries(activities, undefined);
-    expect(entry?.command).toBe("bun run lint");
-  });
-
-  it("extracts changed file paths for file-change tool activities", () => {
-    const activities: OrchestrationThreadActivity[] = [
-      makeActivity({
-        id: "file-tool",
-        kind: "tool.completed",
-        summary: "File change complete",
-        payload: {
-          itemType: "file_change",
-          data: {
-            item: {
-              changes: [
-                { path: "apps/web/src/components/ChatView.tsx" },
-                { filename: "apps/web/src/session-logic.ts" },
-              ],
-            },
-          },
-        },
-      }),
-    ];
-
-    const [entry] = deriveWorkLogEntries(activities, undefined);
-    expect(entry?.changedFiles).toEqual([
-      "apps/web/src/components/ChatView.tsx",
-      "apps/web/src/session-logic.ts",
-    ]);
-  });
 });
 
 describe("deriveTimelineEntries", () => {
@@ -591,67 +542,19 @@ describe("isLatestTurnSettled", () => {
   });
 });
 
-describe("deriveActiveWorkStartedAt", () => {
-  const latestTurn = {
-    turnId: TurnId.makeUnsafe("turn-1"),
-    startedAt: "2026-02-27T21:10:00.000Z",
-    completedAt: "2026-02-27T21:10:06.000Z",
-  } as const;
-
-  it("prefers the in-flight turn start when the latest turn is not settled", () => {
-    expect(
-      deriveActiveWorkStartedAt(
-        latestTurn,
-        {
-          orchestrationStatus: "running",
-          activeTurnId: TurnId.makeUnsafe("turn-1"),
-        },
-        "2026-02-27T21:11:00.000Z",
-      ),
-    ).toBe("2026-02-27T21:10:00.000Z");
-  });
-
-  it("falls back to sendStartedAt once the latest turn is settled", () => {
-    expect(
-      deriveActiveWorkStartedAt(
-        latestTurn,
-        {
-          orchestrationStatus: "ready",
-          activeTurnId: undefined,
-        },
-        "2026-02-27T21:11:00.000Z",
-      ),
-    ).toBe("2026-02-27T21:11:00.000Z");
-  });
-
-  it("uses sendStartedAt for a fresh send after the prior turn completed", () => {
-    expect(
-      deriveActiveWorkStartedAt(
-        {
-          turnId: TurnId.makeUnsafe("turn-1"),
-          startedAt: "2026-02-27T21:10:00.000Z",
-          completedAt: "2026-02-27T21:10:06.000Z",
-        },
-        null,
-        "2026-02-27T21:11:00.000Z",
-      ),
-    ).toBe("2026-02-27T21:11:00.000Z");
-  });
-});
-
 describe("PROVIDER_OPTIONS", () => {
-  it("keeps Claude Code and Cursor visible as unavailable placeholders in the stack base", () => {
+  it("advertises Claude Code on the Claude stack while keeping Cursor as a placeholder", () => {
     const claude = PROVIDER_OPTIONS.find((option) => option.value === "claudeCode");
     const cursor = PROVIDER_OPTIONS.find((option) => option.value === "cursor");
     expect(PROVIDER_OPTIONS).toEqual([
       { value: "codex", label: "Codex", available: true },
-      { value: "claudeCode", label: "Claude Code", available: false },
+      { value: "claudeCode", label: "Claude Code", available: true },
       { value: "cursor", label: "Cursor", available: false },
     ]);
     expect(claude).toEqual({
       value: "claudeCode",
       label: "Claude Code",
-      available: false,
+      available: true,
     });
     expect(cursor).toEqual({
       value: "cursor",
