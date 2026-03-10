@@ -1,6 +1,6 @@
 import type { GitStackedAction, GitStatusResult, ThreadId } from "@t3tools/contracts";
 import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDownIcon, CloudUploadIcon, GitCommitIcon, InfoIcon } from "lucide-react";
 import { GitHubIcon } from "./Icons";
 import {
@@ -42,6 +42,8 @@ import {
 } from "~/lib/gitReactQuery";
 import { preferredTerminalEditor, resolvePathLinkTarget } from "~/terminal-links";
 import { readNativeApi } from "~/nativeApi";
+import { newCommandId } from "~/lib/utils";
+import { useStore } from "~/store";
 
 interface GitActionsControlProps {
   gitCwd: string | null;
@@ -162,6 +164,52 @@ export default function GitActionsControl({ gitCwd, activeThreadId }: GitActions
     if (!isGitStatusOutOfSync) return;
     void invalidateGitQueries(queryClient);
   }, [isGitStatusOutOfSync, queryClient]);
+
+  // Keep thread.branch in sync with the actual git branch so the sidebar can
+  // match PR status even when the agent (not the user) switches branches.
+  const setThreadBranch = useStore((store) => store.setThreadBranch);
+  const activeThreadBranch = useStore((store) =>
+    activeThreadId ? (store.threads.find((t) => t.id === activeThreadId)?.branch ?? null) : null,
+  );
+  const activeThreadWorktreePath = useStore((store) =>
+    activeThreadId
+      ? (store.threads.find((t) => t.id === activeThreadId)?.worktreePath ?? null)
+      : null,
+  );
+  const branchSyncInFlightRef = useRef<string | null>(null);
+  useEffect(() => {
+    const detectedBranch = gitStatus?.branch ?? null;
+    if (!activeThreadId || !detectedBranch) return;
+    if (detectedBranch === activeThreadBranch) {
+      branchSyncInFlightRef.current = null;
+      return;
+    }
+    // Avoid re-dispatching while a previous sync for the same branch is pending.
+    if (branchSyncInFlightRef.current === detectedBranch) return;
+    branchSyncInFlightRef.current = detectedBranch;
+
+    // Optimistic local update so sidebar picks it up immediately.
+    setThreadBranch(activeThreadId, detectedBranch, activeThreadWorktreePath);
+
+    // Persist to server orchestration state.
+    const api = readNativeApi();
+    if (api) {
+      void api.orchestration
+        .dispatchCommand({
+          type: "thread.meta.update",
+          commandId: newCommandId(),
+          threadId: activeThreadId,
+          branch: detectedBranch,
+        })
+        .catch(() => undefined);
+    }
+  }, [
+    activeThreadId,
+    activeThreadBranch,
+    activeThreadWorktreePath,
+    gitStatus?.branch,
+    setThreadBranch,
+  ]);
 
   const gitStatusForActions = isGitStatusOutOfSync ? null : gitStatus;
 
