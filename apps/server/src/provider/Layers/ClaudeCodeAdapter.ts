@@ -1324,6 +1324,13 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
             yield* completeTurn(context, "failed", message);
           }),
         ),
+        Effect.ensuring(
+          Effect.gen(function* () {
+            if (!context.stopped) {
+              yield* stopSessionInternal(context, { emitExitEvent: true });
+            }
+          }),
+        ),
       );
 
     const stopSessionInternal = (
