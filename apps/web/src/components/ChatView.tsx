@@ -5691,6 +5691,8 @@ const MessagesTimeline = memo(function MessagesTimeline({
   );
 });
 
+// claudeCode is intentionally included here — it was previously excluded while the feature was
+// in development, but is now ready to appear in the new session provider picker.
 function isAvailableProviderOption(option: (typeof PROVIDER_OPTIONS)[number]): option is {
   value: ProviderKind;
   label: string;

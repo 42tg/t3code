@@ -277,7 +277,11 @@ const make = Effect.gen(function* () {
     openInEditor: (input) => Effect.flatMap(resolveEditorLaunch(input), launchDetached),
     openInWarp: (input) =>
       Effect.gen(function* () {
-        const claudeArgs = input.sessionId ? ` --resume ${input.sessionId}` : "";
+        if (process.platform !== "darwin") {
+          return yield* new OpenError({ message: "Open in Warp is only supported on macOS" });
+        }
+        const escapedSessionId = input.sessionId?.replace(/'/g, "'\\''") ?? "";
+        const claudeArgs = input.sessionId ? ` --resume '${escapedSessionId}'` : "";
         const command = `cd ${input.cwd.replace(/'/g, "'\\''")} && claude${claudeArgs}`;
         const escapedCommand = command.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
         yield* launchDetached({
