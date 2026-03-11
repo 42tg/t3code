@@ -195,7 +195,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
     if (!branches) return null;
     return branches.find((b) => b.isDefault)?.name ?? null;
   }, [gitBranchesQuery.data?.branches]);
-  const [showBranchDiff, setShowBranchDiff] = useState(false);
+  const showBranchDiff = diffSearch.diffBranch === "1";
   const branchDiffQuery = useQuery(
     gitDiffBranchQueryOptions({
       cwd: activeCwd ?? null,
@@ -509,12 +509,12 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
             type="button"
             className="shrink-0 rounded-md"
             onClick={selectWholeConversation}
-            data-turn-chip-selected={selectedTurnId === null}
+            data-turn-chip-selected={selectedTurnId === null && !showBranchDiff}
           >
             <div
               className={cn(
                 "rounded-md border px-2 py-1 text-left transition-colors",
-                selectedTurnId === null
+                selectedTurnId === null && !showBranchDiff
                   ? "border-border bg-accent text-accent-foreground"
                   : "border-border/70 bg-background/70 text-muted-foreground/80 hover:border-border hover:text-foreground/80",
               )}
@@ -556,16 +556,36 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
         </div>
       </div>
       {defaultBranchName && (
-        <Button
-          variant={showBranchDiff ? "default" : "outline"}
-          size="xs"
-          className="shrink-0 gap-1 [-webkit-app-region:no-drag]"
-          onClick={() => setShowBranchDiff((prev) => !prev)}
+        <button
+          type="button"
+          className={cn(
+            "shrink-0 rounded-md [-webkit-app-region:no-drag]",
+          )}
+          onClick={() => {
+            if (!activeThread) return;
+            void navigate({
+              to: "/$threadId",
+              params: { threadId: activeThread.id },
+              search: (previous) => {
+                const rest = stripDiffSearchParams(previous);
+                return { ...rest, diff: "1" as const, ...(!showBranchDiff ? { diffBranch: "1" as const } : {}) };
+              },
+            });
+          }}
           title={`Show full diff to ${defaultBranchName}`}
         >
-          <GitBranchIcon className="size-3" />
-          <span className="text-[10px]">Diff to {defaultBranchName}</span>
-        </Button>
+          <div
+            className={cn(
+              "flex items-center gap-1 rounded-md border px-2 py-1 transition-colors",
+              showBranchDiff
+                ? "border-border bg-accent text-accent-foreground"
+                : "border-border/70 bg-background/70 text-muted-foreground/80 hover:border-border hover:text-foreground/80",
+            )}
+          >
+            <GitBranchIcon className="size-2.5" />
+            <span className="text-[10px] leading-tight font-medium">Diff to {defaultBranchName}</span>
+          </div>
+        </button>
       )}
       <ToggleGroup
         className="shrink-0 [-webkit-app-region:no-drag]"
