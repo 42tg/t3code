@@ -60,6 +60,8 @@ import {
 } from "./ui/sidebar";
 import { formatWorktreePathForDisplay, getOrphanedWorktreePathForThread } from "../worktreeCleanup";
 import { isNonEmpty as isNonEmptyString } from "effect/String";
+import { Dialog, DialogPopup } from "./ui/dialog";
+import ReviewPrDialog from "./ReviewPrDialog";
 
 const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
 const THREAD_PREVIEW_LIMIT = 6;
@@ -301,6 +303,10 @@ export default function Sidebar() {
   const renamingCommittedRef = useRef(false);
   const renamingInputRef = useRef<HTMLInputElement | null>(null);
   const [desktopUpdateState, setDesktopUpdateState] = useState<DesktopUpdateState | null>(null);
+  const [reviewPrProjectId, setReviewPrProjectId] = useState<ProjectId | null>(null);
+  const reviewPrProject = reviewPrProjectId
+    ? projects.find((p) => p.id === reviewPrProjectId)
+    : null;
   const pendingApprovalByThreadId = useMemo(() => {
     const map = new Map<ThreadId, boolean>();
     for (const thread of threads) {
@@ -753,9 +759,18 @@ export default function Sidebar() {
       const api = readNativeApi();
       if (!api) return;
       const clicked = await api.contextMenu.show(
-        [{ id: "delete", label: "Delete", destructive: true }],
+        [
+          { id: "review-pr", label: "Review PR" },
+          { id: "delete", label: "Delete", destructive: true },
+        ],
         position,
       );
+
+      if (clicked === "review-pr") {
+        setReviewPrProjectId(projectId);
+        return;
+      }
+
       if (clicked !== "delete") return;
 
       const project = projects.find((entry) => entry.id === projectId);
@@ -1351,6 +1366,23 @@ export default function Sidebar() {
           </button>
         )}
       </SidebarFooter>
+
+      <Dialog
+        open={reviewPrProject !== null}
+        onOpenChange={(open) => {
+          if (!open) setReviewPrProjectId(null);
+        }}
+      >
+        {reviewPrProject && (
+          <DialogPopup>
+            <ReviewPrDialog
+              projectId={reviewPrProject.id}
+              projectCwd={reviewPrProject.cwd}
+              onClose={() => setReviewPrProjectId(null)}
+            />
+          </DialogPopup>
+        )}
+      </Dialog>
     </>
   );
 }

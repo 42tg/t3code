@@ -19,6 +19,19 @@ export interface GitHubPullRequestSummary {
   readonly headRefName: string;
 }
 
+export interface GitHubPullRequestDetails {
+  readonly number: number;
+  readonly title: string;
+  readonly body: string;
+  readonly url: string;
+  readonly state: "OPEN" | "CLOSED" | "MERGED";
+  readonly headRefName: string;
+  readonly baseRefName: string;
+  readonly additions: number;
+  readonly deletions: number;
+  readonly changedFiles: number;
+}
+
 /**
  * GitHubCliShape - Service API for executing GitHub CLI commands.
  */
@@ -58,6 +71,14 @@ export interface GitHubCliShape {
   readonly getDefaultBranch: (input: {
     readonly cwd: string;
   }) => Effect.Effect<string | null, GitHubCliError>;
+
+  /**
+   * Fetch full details for a pull request by URL or `owner/repo#number`.
+   */
+  readonly fetchPrDetails: (input: {
+    readonly cwd: string;
+    readonly prUrl: string;
+  }) => Effect.Effect<GitHubPullRequestDetails, GitHubCliError>;
 }
 
 /**

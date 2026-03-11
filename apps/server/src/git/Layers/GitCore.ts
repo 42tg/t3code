@@ -1021,6 +1021,21 @@ const makeGitCore = Effect.gen(function* () {
       const worktreePath =
         input.path ?? path.join(homeDir, ".t3", "worktrees", repoName, sanitizedBranch);
 
+      // If the base branch is a remote ref (e.g. "origin/feature"), fetch it first
+      // so that the ref is available locally for worktree creation.
+      const remoteRefMatch = input.branch.match(/^([\w.-]+)\/(.*)/);
+      if (remoteRefMatch) {
+        const [, remoteName, remoteBranch] = remoteRefMatch;
+        if (remoteName && remoteBranch) {
+          yield* runGit(
+            "GitCore.createWorktree.fetch",
+            input.cwd,
+            ["fetch", "--quiet", "--no-tags", remoteName, remoteBranch],
+            true, // allowNonZeroExit — fetch failure is not fatal, worktree add will error clearly
+          );
+        }
+      }
+
       yield* executeGit(
         "GitCore.createWorktree",
         input.cwd,

@@ -93,6 +93,12 @@ export const GitInitInput = Schema.Struct({
 });
 export type GitInitInput = typeof GitInitInput.Type;
 
+export const GitFetchPrDetailsInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+  prUrl: TrimmedNonEmptyStringSchema,
+});
+export type GitFetchPrDetailsInput = typeof GitFetchPrDetailsInput.Type;
+
 // RPC Results
 
 const GitStatusPr = Schema.Struct({
@@ -170,3 +176,17 @@ export const GitPullResult = Schema.Struct({
   upstreamBranch: TrimmedNonEmptyStringSchema.pipe(Schema.NullOr),
 });
 export type GitPullResult = typeof GitPullResult.Type;
+
+export const GitFetchPrDetailsResult = Schema.Struct({
+  number: PositiveInt,
+  title: TrimmedNonEmptyStringSchema,
+  body: Schema.String,
+  url: Schema.String,
+  state: Schema.Literals(["OPEN", "CLOSED", "MERGED"]),
+  headRefName: TrimmedNonEmptyStringSchema,
+  baseRefName: TrimmedNonEmptyStringSchema,
+  additions: NonNegativeInt,
+  deletions: NonNegativeInt,
+  changedFiles: NonNegativeInt,
+});
+export type GitFetchPrDetailsResult = typeof GitFetchPrDetailsResult.Type;

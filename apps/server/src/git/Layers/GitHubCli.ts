@@ -2,7 +2,11 @@ import { Effect, Layer } from "effect";
 
 import { runProcess } from "../../processRunner";
 import { GitHubCliError } from "../Errors.ts";
-import { GitHubCli, type GitHubCliShape } from "../Services/GitHubCli.ts";
+import {
+  GitHubCli,
+  type GitHubCliShape,
+  type GitHubPullRequestDetails,
+} from "../Services/GitHubCli.ts";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
@@ -99,6 +103,46 @@ function parseOpenPullRequests(raw: string): ReadonlyArray<{
   return result;
 }
 
+const PR_DETAILS_JSON_FIELDS =
+  "number,title,body,url,state,headRefName,baseRefName,additions,deletions,changedFiles";
+
+function parsePrDetails(raw: string): GitHubPullRequestDetails {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) {
+    throw new Error("GitHub CLI returned empty response for PR details.");
+  }
+
+  const parsed: unknown = JSON.parse(trimmed);
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("GitHub CLI returned non-object JSON for PR details.");
+  }
+
+  const record = parsed as Record<string, unknown>;
+  if (
+    typeof record.number !== "number" ||
+    typeof record.title !== "string" ||
+    typeof record.url !== "string" ||
+    typeof record.state !== "string" ||
+    typeof record.headRefName !== "string" ||
+    typeof record.baseRefName !== "string"
+  ) {
+    throw new Error("GitHub CLI returned incomplete PR details JSON.");
+  }
+
+  return {
+    number: record.number,
+    title: record.title,
+    body: typeof record.body === "string" ? record.body : "",
+    url: record.url,
+    state: record.state as "OPEN" | "CLOSED" | "MERGED",
+    headRefName: record.headRefName,
+    baseRefName: record.baseRefName,
+    additions: typeof record.additions === "number" ? record.additions : 0,
+    deletions: typeof record.deletions === "number" ? record.deletions : 0,
+    changedFiles: typeof record.changedFiles === "number" ? record.changedFiles : 0,
+  };
+}
+
 const makeGitHubCli = Effect.sync(() => {
   const execute: GitHubCliShape["execute"] = (input) =>
     Effect.tryPromise({
@@ -169,6 +213,27 @@ const makeGitHubCli = Effect.sync(() => {
           const trimmed = value.stdout.trim();
           return trimmed.length > 0 ? trimmed : null;
         }),
+      ),
+    fetchPrDetails: (input) =>
+      execute({
+        cwd: input.cwd,
+        args: ["pr", "view", input.prUrl, "--json", PR_DETAILS_JSON_FIELDS],
+      }).pipe(
+        Effect.map((result) => result.stdout),
+        Effect.flatMap((raw) =>
+          Effect.try({
+            try: () => parsePrDetails(raw),
+            catch: (error: unknown) =>
+              new GitHubCliError({
+                operation: "fetchPrDetails",
+                detail:
+                  error instanceof Error
+                    ? `GitHub CLI returned invalid PR details JSON: ${error.message}`
+                    : "GitHub CLI returned invalid PR details JSON.",
+                ...(error !== undefined ? { cause: error } : {}),
+              }),
+          }),
+        ),
       ),
   } satisfies GitHubCliShape;
 

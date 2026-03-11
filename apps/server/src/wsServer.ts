@@ -59,6 +59,7 @@ import { clamp } from "effect/Number";
 import { Open, resolveAvailableEditors } from "./open";
 import { ServerConfig } from "./config";
 import { GitCore } from "./git/Services/GitCore.ts";
+import { GitHubCli } from "./git/Services/GitHubCli.ts";
 import { tryHandleProjectFaviconRequest } from "./projectFaviconRoute";
 import {
   ATTACHMENTS_ROUTE_PREFIX,
@@ -149,6 +150,28 @@ function websocketRawToString(raw: unknown): string | null {
   return null;
 }
 
+/**
+ * Best-effort extraction of the request `id` from raw JSON text.
+ * Used so that schema validation errors can be sent back with the
+ * correct request id instead of "unknown".
+ */
+function extractRequestId(messageText: string): string {
+  try {
+    const parsed: unknown = JSON.parse(messageText);
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      "id" in parsed &&
+      typeof (parsed as { id: unknown }).id === "string"
+    ) {
+      return (parsed as { id: string }).id;
+    }
+  } catch {
+    // Fall through
+  }
+  return "unknown";
+}
+
 function toPosixRelativePath(input: string): string {
   return input.replaceAll("\\", "/");
 }
@@ -214,6 +237,7 @@ export type ServerRuntimeServices =
   | ServerCoreRuntimeServices
   | GitManager
   | GitCore
+  | GitHubCli
   | TerminalManager
   | Keybindings
   | Open
@@ -255,6 +279,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const keybindingsManager = yield* Keybindings;
   const providerHealth = yield* ProviderHealth;
   const git = yield* GitCore;
+  const gitHubCli = yield* GitHubCli;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
 
@@ -846,6 +871,11 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         return yield* git.initRepo(body);
       }
 
+      case WS_METHODS.gitFetchPrDetails: {
+        const body = stripRequestTag(request.body);
+        return yield* gitHubCli.fetchPrDetails(body);
+      }
+
       case WS_METHODS.terminalOpen: {
         const body = stripRequestTag(request.body);
         return yield* terminalManager.open(body);
@@ -915,10 +945,14 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       return;
     }
 
+    // Extract the request id from the raw JSON before full schema validation
+    // so we can send an error response the client can match to its pending request.
+    const rawRequestId = extractRequestId(messageText);
+
     const request = Schema.decodeExit(Schema.fromJsonString(WebSocketRequest))(messageText);
     if (request._tag === "Failure") {
       const errorResponse = yield* encodeResponse({
-        id: "unknown",
+        id: rawRequestId,
         error: { message: `Invalid request format: ${messageFromCause(request.cause)}` },
       });
       ws.send(errorResponse);

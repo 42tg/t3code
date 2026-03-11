@@ -279,6 +279,10 @@ function createGitHubCliWithFakeGh(scenario: FakeGhScenario = {}): {
             return value.length > 0 ? value : null;
           }),
         ),
+      fetchPrDetails: () =>
+        Effect.fail(
+          new GitHubCliError({ operation: "fetchPrDetails", detail: "Not implemented in test." }),
+        ),
     },
     ghCalls,
   };

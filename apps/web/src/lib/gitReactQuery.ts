@@ -155,6 +155,16 @@ export function gitCreateWorktreeMutationOptions(input: { queryClient: QueryClie
   });
 }
 
+export function gitFetchPrDetailsMutationOptions() {
+  return mutationOptions({
+    mutationKey: ["git", "mutation", "fetch-pr-details"] as const,
+    mutationFn: async ({ cwd, prUrl }: { cwd: string; prUrl: string }) => {
+      const api = ensureNativeApi();
+      return api.git.fetchPrDetails({ cwd, prUrl });
+    },
+  });
+}
+
 export function gitRemoveWorktreeMutationOptions(input: { queryClient: QueryClient }) {
   return mutationOptions({
     mutationFn: async ({ cwd, path, force }: { cwd: string; path: string; force?: boolean }) => {

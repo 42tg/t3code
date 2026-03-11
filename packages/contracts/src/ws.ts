@@ -13,6 +13,7 @@ import {
   GitCheckoutInput,
   GitCreateBranchInput,
   GitCreateWorktreeInput,
+  GitFetchPrDetailsInput,
   GitInitInput,
   GitListBranchesInput,
   GitPullInput,
@@ -55,6 +56,7 @@ export const WS_METHODS = {
   gitCreateBranch: "git.createBranch",
   gitCheckout: "git.checkout",
   gitInit: "git.init",
+  gitFetchPrDetails: "git.fetchPrDetails",
 
   // Terminal methods
   terminalOpen: "terminal.open",
@@ -117,6 +119,7 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.gitCreateBranch, GitCreateBranchInput),
   tagRequestBody(WS_METHODS.gitCheckout, GitCheckoutInput),
   tagRequestBody(WS_METHODS.gitInit, GitInitInput),
+  tagRequestBody(WS_METHODS.gitFetchPrDetails, GitFetchPrDetailsInput),
 
   // Terminal methods
   tagRequestBody(WS_METHODS.terminalOpen, TerminalOpenInput),
