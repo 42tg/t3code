@@ -760,11 +760,24 @@ export default function Sidebar() {
       if (!api) return;
       const clicked = await api.contextMenu.show(
         [
+          { id: "copy-path", label: "Copy Workspace Path" },
           { id: "review-pr", label: "Review PR" },
           { id: "delete", label: "Delete", destructive: true },
         ],
         position,
       );
+
+      if (clicked === "copy-path") {
+        const project = projects.find((entry) => entry.id === projectId);
+        if (!project) return;
+        try {
+          await copyTextToClipboard(project.cwd);
+          toastManager.add({ type: "success", title: "Workspace path copied", description: project.cwd });
+        } catch {
+          toastManager.add({ type: "error", title: "Failed to copy workspace path" });
+        }
+        return;
+      }
 
       if (clicked === "review-pr") {
         setReviewPrProjectId(projectId);
