@@ -1038,26 +1038,25 @@ it.layer(TestLayer)("git integration", (it) => {
       }),
     );
 
-    it.effect("throws when new branch name already exists", () =>
+    it.effect("reuses an existing branch when newBranch already exists", () =>
       Effect.gen(function* () {
         const tmp = yield* makeTmpDir();
         yield* initRepoWithCommit(tmp);
         yield* createGitBranch({ cwd: tmp, branch: "existing" });
 
         const wtPath = path.join(tmp, "wt-conflict");
-        const currentBranch = (yield* listGitBranches({ cwd: tmp })).branches.find(
-          (b) => b.current,
-        )!.name;
+        const result = yield* createGitWorktree({
+          cwd: tmp,
+          branch: "main",
+          newBranch: "existing",
+          path: wtPath,
+        });
 
-        const result = yield* Effect.result(
-          createGitWorktree({
-            cwd: tmp,
-            branch: currentBranch,
-            newBranch: "existing",
-            path: wtPath,
-          }),
-        );
-        expect(result._tag).toBe("Failure");
+        expect(result.worktree.path).toBe(wtPath);
+        expect(result.worktree.branch).toBe("existing");
+        expect(yield* git(wtPath, ["branch", "--show-current"])).toBe("existing");
+
+        yield* removeGitWorktree({ cwd: tmp, path: wtPath });
       }),
     );
 

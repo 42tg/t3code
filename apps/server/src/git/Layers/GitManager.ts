@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { realpathSync } from "node:fs";
 
-import { Effect, FileSystem, Layer, Path } from "effect";
+import { Effect, FileSystem, Layer, Path, Schema } from "effect";
 import {
   resolveAutoFeatureBranchName,
   sanitizeBranchFragment,
   sanitizeFeatureBranchName,
 } from "@t3tools/shared/git";
 
-import { GitManagerError } from "../Errors.ts";
+import { GitCommandError, GitManagerError } from "../Errors.ts";
 import { GitManager, type GitManagerShape } from "../Services/GitManager.ts";
 import { GitCore } from "../Services/GitCore.ts";
 import { GitHubCli } from "../Services/GitHubCli.ts";
@@ -115,6 +115,34 @@ function parseRepositoryOwnerLogin(nameWithOwner: string | null): string | null 
   const [ownerLogin] = trimmed.split("/");
   const normalizedOwnerLogin = ownerLogin?.trim() ?? "";
   return normalizedOwnerLogin.length > 0 ? normalizedOwnerLogin : null;
+}
+
+function emptyGitStatus() {
+  return {
+    branch: null,
+    hasWorkingTreeChanges: false,
+    workingTree: {
+      files: [],
+      insertions: 0,
+      deletions: 0,
+    },
+    hasUpstream: false,
+    aheadCount: 0,
+    behindCount: 0,
+    pr: null,
+  } as const;
+}
+
+function isMissingPathGitCommandError(error: unknown): error is GitCommandError {
+  if (!Schema.is(GitCommandError)(error)) {
+    return false;
+  }
+
+  return (
+    error.detail.includes("ENOENT") ||
+    error.detail.includes("no such file or directory") ||
+    error.detail.includes("NotFound: FileSystem.access")
+  );
 }
 
 function parsePullRequestList(raw: unknown): PullRequestInfo[] {
@@ -439,6 +467,12 @@ export const makeGitManager = Effect.gen(function* () {
 
   const readConfigValueNullable = (cwd: string, key: string) =>
     gitCore.readConfigValue(cwd, key).pipe(Effect.catch(() => Effect.succeed(null)));
+
+  const isExistingDirectory = (candidate: string) =>
+    fileSystem.stat(candidate).pipe(
+      Effect.map((stat) => stat.type === "Directory"),
+      Effect.catch(() => Effect.succeed(false)),
+    );
 
   const resolveRemoteRepositoryContext = (cwd: string, remoteName: string | null) =>
     Effect.gen(function* () {
@@ -786,7 +820,23 @@ export const makeGitManager = Effect.gen(function* () {
     });
 
   const status: GitManagerShape["status"] = Effect.fnUntraced(function* (input) {
-    const details = yield* gitCore.statusDetails(input.cwd);
+    const cwdStat = yield* fileSystem
+      .stat(input.cwd)
+      .pipe(Effect.catch(() => Effect.succeed(null)));
+    if (!cwdStat || cwdStat.type !== "Directory") {
+      return emptyGitStatus();
+    }
+
+    const details = yield* gitCore
+      .statusDetails(input.cwd)
+      .pipe(
+        Effect.catch((error) =>
+          isMissingPathGitCommandError(error) ? Effect.succeed(null) : Effect.fail(error),
+        ),
+      );
+    if (!details) {
+      return emptyGitStatus();
+    }
 
     const pr =
       details.branch !== null
@@ -857,6 +907,11 @@ export const makeGitManager = Effect.gen(function* () {
 
       const ensureExistingWorktreeUpstream = (worktreePath: string) =>
         Effect.gen(function* () {
+          const worktreeExists = yield* isExistingDirectory(worktreePath);
+          if (!worktreeExists) {
+            return false as const;
+          }
+
           const details = yield* gitCore.statusDetails(worktreePath);
           yield* configurePullRequestHeadUpstream(
             worktreePath,
@@ -866,6 +921,8 @@ export const makeGitManager = Effect.gen(function* () {
             },
             details.branch ?? pullRequest.headBranch,
           );
+
+          return true as const;
         });
 
       const pullRequestWithRemoteInfo = {
@@ -907,12 +964,16 @@ export const makeGitManager = Effect.gen(function* () {
         existingBranchBeforeFetch?.worktreePath &&
         existingBranchBeforeFetchPath !== rootWorktreePath
       ) {
-        yield* ensureExistingWorktreeUpstream(existingBranchBeforeFetch.worktreePath);
-        return {
-          pullRequest,
-          branch: localPullRequestBranch,
-          worktreePath: existingBranchBeforeFetch.worktreePath,
-        };
+        const reusedExistingWorktree = yield* ensureExistingWorktreeUpstream(
+          existingBranchBeforeFetch.worktreePath,
+        );
+        if (reusedExistingWorktree) {
+          return {
+            pullRequest,
+            branch: localPullRequestBranch,
+            worktreePath: existingBranchBeforeFetch.worktreePath,
+          };
+        }
       }
       if (existingBranchBeforeFetchPath === rootWorktreePath) {
         return yield* gitManagerError(
@@ -935,12 +996,16 @@ export const makeGitManager = Effect.gen(function* () {
         existingBranchAfterFetch?.worktreePath &&
         existingBranchAfterFetchPath !== rootWorktreePath
       ) {
-        yield* ensureExistingWorktreeUpstream(existingBranchAfterFetch.worktreePath);
-        return {
-          pullRequest,
-          branch: localPullRequestBranch,
-          worktreePath: existingBranchAfterFetch.worktreePath,
-        };
+        const reusedExistingWorktree = yield* ensureExistingWorktreeUpstream(
+          existingBranchAfterFetch.worktreePath,
+        );
+        if (reusedExistingWorktree) {
+          return {
+            pullRequest,
+            branch: localPullRequestBranch,
+            worktreePath: existingBranchAfterFetch.worktreePath,
+          };
+        }
       }
       if (existingBranchAfterFetchPath === rootWorktreePath) {
         return yield* gitManagerError(

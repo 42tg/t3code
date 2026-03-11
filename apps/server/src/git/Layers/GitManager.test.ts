@@ -8,6 +8,7 @@ import { Effect, FileSystem, Layer, PlatformError, Scope } from "effect";
 import { expect } from "vitest";
 
 import { GitCommandError, GitHubCliError, TextGenerationError } from "../Errors.ts";
+import { GitCore, type GitCoreShape } from "../Services/GitCore.ts";
 import { type GitManagerShape } from "../Services/GitManager.ts";
 import {
   type GitHubCliShape,
@@ -701,6 +702,155 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
       const status = yield* manager.status({ cwd: repoDir });
       expect(status.branch).toBe("feature/status-no-gh");
       expect(status.pr).toBeNull();
+    }),
+  );
+
+  it.effect("status returns an empty result when the cwd no longer exists", () =>
+    Effect.gen(function* () {
+      const repoDir = fs.mkdtempSync(
+        path.join(
+          process.env.TMPDIR ?? process.env.TEMP ?? process.env.TMP ?? "/tmp",
+          "t3code-git-manager-",
+        ),
+      );
+      const fileSystem = yield* FileSystem.FileSystem;
+      const { manager } = yield* makeManager();
+
+      yield* fileSystem.remove(repoDir, { recursive: true, force: true });
+
+      const status = yield* manager.status({ cwd: repoDir });
+      expect(status).toEqual({
+        branch: null,
+        hasWorkingTreeChanges: false,
+        workingTree: {
+          files: [],
+          insertions: 0,
+          deletions: 0,
+        },
+        hasUpstream: false,
+        aheadCount: 0,
+        behindCount: 0,
+        pr: null,
+      });
+    }),
+  );
+
+  it.effect("preparePullRequestThread skips stale missing worktree paths", () =>
+    Effect.gen(function* () {
+      const repoDir = fs.mkdtempSync(
+        path.join(
+          process.env.TMPDIR ?? process.env.TEMP ?? process.env.TMP ?? "/tmp",
+          "t3code-git-manager-",
+        ),
+      );
+      const missingWorktreePath = path.join(repoDir, "missing-worktree");
+      const newWorktreePath = fs.mkdtempSync(path.join(repoDir, "fresh-worktree-"));
+      const statusCalls: string[] = [];
+      let listBranchesCalls = 0;
+      let fetchPullRequestBranchCalls = 0;
+      let createWorktreeCalls = 0;
+
+      const unsupported = () => Effect.die("unsupported");
+      const fakeGitCore = {
+        status: unsupported,
+        statusDetails: (cwd: string) => {
+          statusCalls.push(cwd);
+          return Effect.succeed({
+            branch: "feature/pr-74",
+            upstreamRef: null,
+            hasWorkingTreeChanges: false,
+            workingTree: { files: [], insertions: 0, deletions: 0 },
+            hasUpstream: false,
+            aheadCount: 0,
+            behindCount: 0,
+          });
+        },
+        prepareCommitContext: unsupported,
+        commit: unsupported,
+        pushCurrentBranch: unsupported,
+        pullCurrentBranch: unsupported,
+        createBranch: unsupported,
+        checkoutBranch: unsupported,
+        initRepo: unsupported,
+        listBranches: () =>
+          Effect.succeed({
+            branches:
+              listBranchesCalls++ === 0
+                ? [
+                    {
+                      name: "feature/pr-74",
+                      current: false,
+                      isDefault: false,
+                      worktreePath: missingWorktreePath,
+                    },
+                  ]
+                : [
+                    {
+                      name: "feature/pr-74",
+                      current: false,
+                      isDefault: false,
+                      worktreePath: null,
+                    },
+                  ],
+            isRepo: true,
+            hasOriginRemote: true,
+          }),
+        createWorktree: () => {
+          createWorktreeCalls += 1;
+          return Effect.succeed({
+            worktree: {
+              path: newWorktreePath,
+              branch: "feature/pr-74",
+            },
+          });
+        },
+        removeWorktree: unsupported,
+        renameBranch: unsupported,
+        fetchPullRequestBranch: () => {
+          fetchPullRequestBranchCalls += 1;
+          return Effect.void;
+        },
+        ensureRemote: unsupported,
+        fetchRemoteBranch: unsupported,
+        setBranchUpstream: unsupported,
+        readConfigValue: unsupported,
+        readRangeContext: unsupported,
+        readPreparedCommitContext: unsupported,
+      } as unknown as GitCoreShape;
+
+      const { service: gitHubCli } = createGitHubCliWithFakeGh({
+        pullRequest: {
+          number: 74,
+          title: "Review PR #74",
+          url: "https://github.com/pingdotgg/codething-mvp/pull/74",
+          baseRefName: "main",
+          headRefName: "feature/pr-74",
+          state: "open",
+        },
+      });
+
+      const manager = yield* makeGitManager.pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            Layer.succeed(GitCore, fakeGitCore),
+            Layer.succeed(GitHubCli, gitHubCli),
+            Layer.succeed(TextGeneration, createTextGeneration()),
+            NodeServices.layer,
+          ),
+        ),
+      );
+
+      const result = yield* manager.preparePullRequestThread({
+        cwd: repoDir,
+        reference: "#74",
+        mode: "worktree",
+      });
+
+      expect(result.branch).toBe("feature/pr-74");
+      expect(result.worktreePath).toBe(newWorktreePath);
+      expect(fetchPullRequestBranchCalls).toBe(1);
+      expect(createWorktreeCalls).toBe(1);
+      expect(statusCalls).toEqual([newWorktreePath]);
     }),
   );
 
