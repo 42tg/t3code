@@ -42,7 +42,6 @@ import { ToggleGroup, Toggle } from "./ui/toggle-group";
 type DiffRenderMode = "stacked" | "split";
 type DiffThemeType = "light" | "dark";
 
-const DIFF_PANEL_UNSAFE_CSS = DIFF_UNSAFE_CSS;
 
 type RenderablePatch =
   | {
@@ -699,7 +698,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
                             lineDiffType: "none",
                             theme: resolveDiffThemeName(resolvedTheme),
                             themeType: resolvedTheme as DiffThemeType,
-                            unsafeCSS: DIFF_PANEL_UNSAFE_CSS,
+                            unsafeCSS: DIFF_UNSAFE_CSS,
                           }}
                         />
                       </div>
@@ -797,7 +796,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
                               lineDiffType: "none",
                               theme: resolveDiffThemeName(resolvedTheme),
                               themeType: resolvedTheme as DiffThemeType,
-                              unsafeCSS: DIFF_PANEL_UNSAFE_CSS,
+                              unsafeCSS: DIFF_UNSAFE_CSS,
                             }}
                           />
                         </div>
