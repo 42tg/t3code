@@ -1,0 +1,323 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<coverage generated="1773382482258" clover="3.2.0">
+  <project timestamp="1773382482258" name="All files">
+    <metrics statements="272" coveredstatements="65" conditionals="248" coveredconditionals="24" methods="99" coveredmethods="24" elements="619" coveredelements="113" complexity="0" loc="272" ncloc="272" packages="5" files="10" classes="10"/>
+    <package name="git.Services">
+      <metrics statements="0" coveredstatements="0" conditionals="0" coveredconditionals="0" methods="0" coveredmethods="0"/>
+      <file name="TextGeneration.ts" path="/Users/tobias.graf/dev/own/t3code/apps/server/src/git/Services/TextGeneration.ts">
+        <metrics statements="0" coveredstatements="0" conditionals="0" coveredconditionals="0" methods="0" coveredmethods="0"/>
+      </file>
+    </package>
+    <package name="jira">
+      <metrics statements="2" coveredstatements="0" conditionals="0" coveredconditionals="0" methods="2" coveredmethods="0"/>
+      <file name="Errors.ts" path="/Users/tobias.graf/dev/own/t3code/apps/server/src/jira/Errors.ts">
+        <metrics statements="2" coveredstatements="0" conditionals="0" coveredconditionals="0" methods="2" coveredmethods="0"/>
+        <line num="13" count="0" type="stmt"/>
+        <line num="29" count="0" type="stmt"/>
+      </file>
+    </package>
+    <package name="jira.Layers">
+      <metrics statements="18" coveredstatements="18" conditionals="2" coveredconditionals="2" methods="10" coveredmethods="10"/>
+      <file name="JiraManager.ts" path="/Users/tobias.graf/dev/own/t3code/apps/server/src/jira/Layers/JiraManager.ts">
+        <metrics statements="18" coveredstatements="18" conditionals="2" coveredconditionals="2" methods="10" coveredmethods="10"/>
+        <line num="8" count="4" type="cond" truecount="2" falsecount="0"/>
+        <line num="9" count="1" type="stmt"/>
+        <line num="12" count="1" type="stmt"/>
+        <line num="13" count="10" type="stmt"/>
+        <line num="14" count="10" type="stmt"/>
+        <line num="16" count="10" type="stmt"/>
+        <line num="18" count="10" type="stmt"/>
+        <line num="20" count="10" type="stmt"/>
+        <line num="22" count="10" type="stmt"/>
+        <line num="24" count="10" type="stmt"/>
+        <line num="26" count="10" type="stmt"/>
+        <line num="27" count="2" type="stmt"/>
+        <line num="32" count="10" type="stmt"/>
+        <line num="33" count="1" type="stmt"/>
+        <line num="39" count="10" type="stmt"/>
+        <line num="40" count="1" type="stmt"/>
+        <line num="46" count="10" type="stmt"/>
+        <line num="58" count="1" type="stmt"/>
+      </file>
+    </package>
+    <package name="jira.Services">
+      <metrics statements="0" coveredstatements="0" conditionals="0" coveredconditionals="0" methods="0" coveredmethods="0"/>
+      <file name="JiraCli.ts" path="/Users/tobias.graf/dev/own/t3code/apps/server/src/jira/Services/JiraCli.ts">
+        <metrics statements="0" coveredstatements="0" conditionals="0" coveredconditionals="0" methods="0" coveredmethods="0"/>
+      </file>
+      <file name="JiraManager.ts" path="/Users/tobias.graf/dev/own/t3code/apps/server/src/jira/Services/JiraManager.ts">
+        <metrics statements="0" coveredstatements="0" conditionals="0" coveredconditionals="0" methods="0" coveredmethods="0"/>
+      </file>
+    </package>
+    <package name="orchestration">
+      <metrics statements="252" coveredstatements="47" conditionals="246" coveredconditionals="22" methods="87" coveredmethods="14"/>
+      <file name="Errors.ts" path="/Users/tobias.graf/dev/own/t3code/apps/server/src/orchestration/Errors.ts">
+        <metrics statements="12" coveredstatements="0" conditionals="0" coveredconditionals="0" methods="12" coveredmethods="0"/>
+        <line num="13" count="0" type="stmt"/>
+        <line num="25" count="0" type="stmt"/>
+        <line num="38" count="0" type="stmt"/>
+        <line num="51" count="0" type="stmt"/>
+        <line num="64" count="0" type="stmt"/>
+        <line num="77" count="0" type="stmt"/>
+        <line num="94" count="0" type="stmt"/>
+        <line num="101" count="0" type="stmt"/>
+        <line num="102" count="0" type="stmt"/>
+        <line num="110" count="0" type="stmt"/>
+        <line num="117" count="0" type="stmt"/>
+        <line num="118" count="0" type="stmt"/>
+      </file>
+      <file name="Schemas.ts" path="/Users/tobias.graf/dev/own/t3code/apps/server/src/orchestration/Schemas.ts">
+        <metrics statements="19" coveredstatements="19" conditionals="0" coveredconditionals="0" methods="0" coveredmethods="0"/>
+        <line num="24" count="2" type="stmt"/>
+        <line num="25" count="2" type="stmt"/>
+        <line num="26" count="2" type="stmt"/>
+        <line num="28" count="2" type="stmt"/>
+        <line num="29" count="2" type="stmt"/>
+        <line num="30" count="2" type="stmt"/>
+        <line num="31" count="2" type="stmt"/>
+        <line num="32" count="2" type="stmt"/>
+        <line num="34" count="2" type="stmt"/>
+        <line num="35" count="2" type="stmt"/>
+        <line num="36" count="2" type="stmt"/>
+        <line num="37" count="2" type="stmt"/>
+        <line num="38" count="2" type="stmt"/>
+        <line num="39" count="2" type="stmt"/>
+        <line num="41" count="2" type="stmt"/>
+        <line num="43" count="2" type="stmt"/>
+        <line num="45" count="2" type="stmt"/>
+        <line num="47" count="2" type="stmt"/>
+        <line num="48" count="2" type="stmt"/>
+      </file>
+      <file name="commandInvariants.ts" path="/Users/tobias.graf/dev/own/t3code/apps/server/src/orchestration/commandInvariants.ts">
+        <metrics statements="21" coveredstatements="4" conditionals="12" coveredconditionals="1" methods="12" coveredmethods="3"/>
+        <line num="14" count="0" type="stmt"/>
+        <line num="24" count="3" type="stmt"/>
+        <line num="31" count="0" type="stmt"/>
+        <line num="38" count="0" type="stmt"/>
+        <line num="46" count="0" type="stmt"/>
+        <line num="47" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="48" count="0" type="stmt"/>
+        <line num="50" count="0" type="stmt"/>
+        <line num="63" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="64" count="0" type="stmt"/>
+        <line num="66" count="0" type="stmt"/>
+        <line num="79" count="3" type="stmt"/>
+        <line num="80" count="3" type="cond" truecount="1" falsecount="1"/>
+        <line num="81" count="3" type="stmt"/>
+        <line num="83" count="0" type="stmt"/>
+        <line num="96" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="97" count="0" type="stmt"/>
+        <line num="99" count="0" type="stmt"/>
+        <line num="112" count="0" type="cond" truecount="0" falsecount="4"/>
+        <line num="113" count="0" type="stmt"/>
+        <line num="115" count="0" type="stmt"/>
+      </file>
+      <file name="decider.ts" path="/Users/tobias.graf/dev/own/t3code/apps/server/src/orchestration/decider.ts">
+        <metrics statements="63" coveredstatements="9" conditionals="78" coveredconditionals="10" methods="5" coveredmethods="3"/>
+        <line num="16" count="4" type="stmt"/>
+        <line num="17" count="1" type="stmt"/>
+        <line num="19" count="1" type="stmt"/>
+        <line num="38" count="3" type="stmt"/>
+        <line num="50" count="1" type="stmt"/>
+        <line num="60" count="3" type="cond" truecount="1" falsecount="21"/>
+        <line num="62" count="0" type="stmt"/>
+        <line num="68" count="0" type="stmt"/>
+        <line num="89" count="0" type="stmt"/>
+        <line num="94" count="0" type="stmt"/>
+        <line num="95" count="0" type="stmt"/>
+        <line num="115" count="0" type="stmt"/>
+        <line num="120" count="0" type="stmt"/>
+        <line num="121" count="0" type="stmt"/>
+        <line num="137" count="0" type="stmt"/>
+        <line num="142" count="0" type="stmt"/>
+        <line num="147" count="0" type="stmt"/>
+        <line num="171" count="0" type="stmt"/>
+        <line num="176" count="0" type="stmt"/>
+        <line num="177" count="0" type="stmt"/>
+        <line num="193" count="3" type="stmt"/>
+        <line num="198" count="3" type="stmt"/>
+        <line num="199" count="3" type="stmt"/>
+        <line num="220" count="0" type="stmt"/>
+        <line num="225" count="0" type="stmt"/>
+        <line num="226" count="0" type="stmt"/>
+        <line num="243" count="0" type="stmt"/>
+        <line num="248" count="0" type="stmt"/>
+        <line num="249" count="0" type="stmt"/>
+        <line num="266" count="0" type="stmt"/>
+        <line num="271" count="0" type="stmt"/>
+        <line num="291" count="0" type="stmt"/>
+        <line num="311" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="314" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="319" count="0" type="stmt"/>
+        <line num="323" count="0" type="stmt"/>
+        <line num="328" count="0" type="stmt"/>
+        <line num="345" count="0" type="stmt"/>
+        <line num="350" count="0" type="stmt"/>
+        <line num="372" count="0" type="stmt"/>
+        <line num="377" count="0" type="stmt"/>
+        <line num="398" count="0" type="stmt"/>
+        <line num="403" count="0" type="stmt"/>
+        <line num="420" count="0" type="stmt"/>
+        <line num="425" count="0" type="stmt"/>
+        <line num="441" count="0" type="stmt"/>
+        <line num="446" count="0" type="stmt"/>
+        <line num="463" count="0" type="stmt"/>
+        <line num="468" count="0" type="stmt"/>
+        <line num="491" count="0" type="stmt"/>
+        <line num="496" count="0" type="stmt"/>
+        <line num="518" count="0" type="stmt"/>
+        <line num="523" count="0" type="stmt"/>
+        <line num="539" count="0" type="stmt"/>
+        <line num="544" count="0" type="stmt"/>
+        <line num="566" count="0" type="stmt"/>
+        <line num="571" count="0" type="stmt"/>
+        <line num="587" count="0" type="stmt"/>
+        <line num="593" count="0" type="cond" truecount="0" falsecount="6"/>
+        <line num="600" count="0" type="stmt"/>
+        <line num="617" count="0" type="stmt"/>
+        <line num="618" count="0" type="stmt"/>
+        <line num="619" count="0" type="stmt"/>
+      </file>
+      <file name="projector.ts" path="/Users/tobias.graf/dev/own/t3code/apps/server/src/orchestration/projector.ts">
+        <metrics statements="137" coveredstatements="15" conditionals="156" coveredconditionals="11" methods="58" coveredmethods="8"/>
+        <line num="29" count="2" type="stmt"/>
+        <line num="30" count="2" type="stmt"/>
+        <line num="33" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="34" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="35" count="0" type="stmt"/>
+        <line num="43" count="7" type="cond" truecount="1" falsecount="1"/>
+        <line num="52" count="23" type="stmt"/>
+        <line num="53" count="23" type="stmt"/>
+        <line num="54" count="0" type="stmt"/>
+        <line num="63" count="0" type="stmt"/>
+        <line num="64" count="0" type="stmt"/>
+        <line num="65" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="66" count="0" type="stmt"/>
+        <line num="67" count="0" type="stmt"/>
+        <line num="69" count="0" type="cond" truecount="0" falsecount="4"/>
+        <line num="70" count="0" type="stmt"/>
+        <line num="74" count="0" type="stmt"/>
+        <line num="75" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="77" count="0" type="stmt"/>
+        <line num="78" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="79" count="0" type="stmt"/>
+        <line num="82" count="0" type="cond" truecount="0" falsecount="4"/>
+        <line num="88" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="91" count="0" type="stmt"/>
+        <line num="92" count="0" type="stmt"/>
+        <line num="96" count="0" type="stmt"/>
+        <line num="97" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="99" count="0" type="stmt"/>
+        <line num="100" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="101" count="0" type="stmt"/>
+        <line num="104" count="0" type="cond" truecount="0" falsecount="4"/>
+        <line num="110" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="113" count="0" type="stmt"/>
+        <line num="114" count="0" type="stmt"/>
+        <line num="118" count="0" type="stmt"/>
+        <line num="125" count="0" type="stmt"/>
+        <line num="126" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="134" count="0" type="stmt"/>
+        <line num="135" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="143" count="0" type="cond" truecount="0" falsecount="4"/>
+        <line num="144" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="145" count="0" type="stmt"/>
+        <line num="147" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="148" count="0" type="stmt"/>
+        <line num="149" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="150" count="0" type="stmt"/>
+        <line num="153" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="157" count="8" type="stmt"/>
+        <line num="169" count="15" type="stmt"/>
+        <line num="175" count="15" type="cond" truecount="2" falsecount="13"/>
+        <line num="177" count="0" type="stmt"/>
+        <line num="179" count="0" type="stmt"/>
+        <line num="180" count="0" type="stmt"/>
+        <line num="191" count="0" type="stmt"/>
+        <line num="195" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="203" count="0" type="stmt"/>
+        <line num="204" count="0" type="stmt"/>
+        <line num="207" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="226" count="0" type="stmt"/>
+        <line num="227" count="0" type="stmt"/>
+        <line num="230" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="242" count="8" type="stmt"/>
+        <line num="243" count="8" type="stmt"/>
+        <line num="249" count="8" type="stmt"/>
+        <line num="272" count="8" type="stmt"/>
+        <line num="273" count="8" type="stmt"/>
+        <line num="276" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="282" count="0" type="stmt"/>
+        <line num="283" count="0" type="stmt"/>
+        <line num="293" count="7" type="stmt"/>
+        <line num="294" count="7" type="stmt"/>
+        <line num="308" count="0" type="stmt"/>
+        <line num="309" count="0" type="stmt"/>
+        <line num="319" count="0" type="stmt"/>
+        <line num="325" count="0" type="stmt"/>
+        <line num="335" count="0" type="stmt"/>
+        <line num="336" count="0" type="stmt"/>
+        <line num="342" count="0" type="stmt"/>
+        <line num="343" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="344" count="0" type="stmt"/>
+        <line num="347" count="0" type="stmt"/>
+        <line num="364" count="0" type="stmt"/>
+        <line num="365" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="367" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="390" count="0" type="stmt"/>
+        <line num="392" count="0" type="stmt"/>
+        <line num="402" count="0" type="stmt"/>
+        <line num="403" count="0" type="stmt"/>
+        <line num="409" count="0" type="stmt"/>
+        <line num="410" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="411" count="0" type="stmt"/>
+        <line num="414" count="0" type="stmt"/>
+        <line num="421" count="0" type="stmt"/>
+        <line num="451" count="0" type="stmt"/>
+        <line num="452" count="0" type="stmt"/>
+        <line num="458" count="0" type="stmt"/>
+        <line num="459" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="460" count="0" type="stmt"/>
+        <line num="463" count="0" type="stmt"/>
+        <line num="464" count="0" type="stmt"/>
+        <line num="469" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="473" count="0" type="stmt"/>
+        <line num="483" count="0" type="stmt"/>
+        <line num="484" count="0" type="stmt"/>
+        <line num="490" count="0" type="stmt"/>
+        <line num="491" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="492" count="0" type="stmt"/>
+        <line num="495" count="0" type="stmt"/>
+        <line num="515" count="0" type="stmt"/>
+        <line num="516" count="0" type="cond" truecount="0" falsecount="5"/>
+        <line num="517" count="0" type="stmt"/>
+        <line num="520" count="0" type="stmt"/>
+        <line num="521" count="0" type="stmt"/>
+        <line num="524" count="0" type="stmt"/>
+        <line num="527" count="0" type="stmt"/>
+        <line num="551" count="0" type="stmt"/>
+        <line num="553" count="0" type="stmt"/>
+        <line num="554" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="555" count="0" type="stmt"/>
+        <line num="558" count="0" type="stmt"/>
+        <line num="559" count="0" type="stmt"/>
+        <line num="560" count="0" type="stmt"/>
+        <line num="562" count="0" type="stmt"/>
+        <line num="563" count="0" type="stmt"/>
+        <line num="568" count="0" type="stmt"/>
+        <line num="572" count="0" type="stmt"/>
+        <line num="574" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="576" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="587" count="0" type="stmt"/>
+        <line num="602" count="0" type="stmt"/>
+        <line num="609" count="0" type="stmt"/>
+        <line num="610" count="0" type="cond" truecount="0" falsecount="2"/>
+        <line num="611" count="0" type="stmt"/>
+        <line num="614" count="0" type="stmt"/>
+        <line num="615" count="0" type="stmt"/>
+        <line num="621" count="0" type="stmt"/>
+        <line num="632" count="0" type="stmt"/>
+      </file>
+    </package>
+  </project>
+</coverage>
