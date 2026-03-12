@@ -246,6 +246,7 @@ function runtimeEventToActivities(
             ...(requestKind ? { requestKind } : {}),
             requestType: event.payload.requestType,
             ...(event.payload.detail ? { detail: truncateDetail(event.payload.detail) } : {}),
+            ...(event.payload.args !== undefined ? { args: event.payload.args } : {}),
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
