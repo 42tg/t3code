@@ -33,6 +33,8 @@ const BUFFERED_MESSAGE_TEXT_BY_MESSAGE_ID_CACHE_CAPACITY = 20_000;
 const BUFFERED_MESSAGE_TEXT_BY_MESSAGE_ID_TTL = Duration.minutes(120);
 const BUFFERED_PROPOSED_PLAN_BY_ID_CACHE_CAPACITY = 10_000;
 const BUFFERED_PROPOSED_PLAN_BY_ID_TTL = Duration.minutes(120);
+const ASSISTANT_SEGMENT_COUNTER_CACHE_CAPACITY = 10_000;
+const ASSISTANT_SEGMENT_COUNTER_TTL = Duration.minutes(120);
 const MAX_BUFFERED_ASSISTANT_CHARS = 24_000;
 const STRICT_PROVIDER_LIFECYCLE_GUARD = process.env.T3CODE_STRICT_PROVIDER_LIFECYCLE_GUARD !== "0";
 
@@ -545,6 +547,14 @@ const make = Effect.gen(function* () {
     lookup: () => Effect.succeed({ text: "", createdAt: "" }),
   });
 
+  /** Tracks the current message segment index per turn so that tool activities
+   *  between assistant text deltas cause a new assistant message to be created. */
+  const assistantSegmentByTurnKey = yield* Cache.make<string, number>({
+    capacity: ASSISTANT_SEGMENT_COUNTER_CACHE_CAPACITY,
+    timeToLive: ASSISTANT_SEGMENT_COUNTER_TTL,
+    lookup: () => Effect.succeed(0),
+  });
+
   const isGitRepoForThread = Effect.fnUntraced(function* (threadId: ThreadId) {
     const readModel = yield* orchestrationEngine.getReadModel();
     const thread = readModel.threads.find((entry) => entry.id === threadId);
@@ -606,6 +616,19 @@ const make = Effect.gen(function* () {
   const clearAssistantMessageIdsForTurn = (threadId: ThreadId, turnId: TurnId) =>
     Cache.invalidate(turnMessageIdsByTurnKey, providerTurnKey(threadId, turnId));
 
+  const getAssistantSegment = (threadId: ThreadId, turnId: TurnId) =>
+    Cache.get(assistantSegmentByTurnKey, providerTurnKey(threadId, turnId));
+
+  const incrementAssistantSegment = (threadId: ThreadId, turnId: TurnId) =>
+    getAssistantSegment(threadId, turnId).pipe(
+      Effect.flatMap((current) =>
+        Cache.set(assistantSegmentByTurnKey, providerTurnKey(threadId, turnId), current + 1),
+      ),
+    );
+
+  const clearAssistantSegment = (threadId: ThreadId, turnId: TurnId) =>
+    Cache.invalidate(assistantSegmentByTurnKey, providerTurnKey(threadId, turnId));
+
   const appendBufferedAssistantText = (messageId: MessageId, delta: string) =>
     Cache.getOption(bufferedAssistantTextByMessageId, messageId).pipe(
       Effect.flatMap((existingText) =>
@@ -633,6 +656,11 @@ const make = Effect.gen(function* () {
           Effect.as(Option.getOrElse(existingText, () => "")),
         ),
       ),
+    );
+
+  const peekBufferedAssistantText = (messageId: MessageId) =>
+    Cache.getOption(bufferedAssistantTextByMessageId, messageId).pipe(
+      Effect.map((existingText) => Option.getOrElse(existingText, () => "")),
     );
 
   const clearBufferedAssistantText = (messageId: MessageId) =>
@@ -967,10 +995,12 @@ const make = Effect.gen(function* () {
         event.type === "turn.proposed.delta" ? event.payload.delta : undefined;
 
       if (assistantDelta && assistantDelta.length > 0) {
-        const assistantMessageId = MessageId.makeUnsafe(
-          `assistant:${event.itemId ?? event.turnId ?? event.eventId}`,
-        );
         const turnId = toTurnId(event.turnId);
+        const segment = turnId ? yield* getAssistantSegment(thread.id, turnId) : 0;
+        const baseId = event.itemId ?? event.turnId ?? event.eventId;
+        const assistantMessageId = MessageId.makeUnsafe(
+          segment > 0 ? `assistant:${baseId}:${segment}` : `assistant:${baseId}`,
+        );
         if (turnId) {
           yield* rememberAssistantMessageId(thread.id, turnId, assistantMessageId);
         }
@@ -1003,10 +1033,12 @@ const make = Effect.gen(function* () {
       }
 
       if (thinkingDelta && thinkingDelta.length > 0) {
-        const assistantMessageId = MessageId.makeUnsafe(
-          `assistant:${event.itemId ?? event.turnId ?? event.eventId}`,
-        );
         const turnId = toTurnId(event.turnId);
+        const segment = turnId ? yield* getAssistantSegment(thread.id, turnId) : 0;
+        const baseId = event.itemId ?? event.turnId ?? event.eventId;
+        const assistantMessageId = MessageId.makeUnsafe(
+          segment > 0 ? `assistant:${baseId}:${segment}` : `assistant:${baseId}`,
+        );
         if (turnId) {
           yield* rememberAssistantMessageId(thread.id, turnId, assistantMessageId);
         }
@@ -1045,15 +1077,22 @@ const make = Effect.gen(function* () {
         yield* appendBufferedProposedPlan(planId, proposedPlanDelta, now);
       }
 
-      const assistantCompletion =
-        event.type === "item.completed" && event.payload.itemType === "assistant_message"
-          ? {
-              messageId: MessageId.makeUnsafe(
-                `assistant:${event.itemId ?? event.turnId ?? event.eventId}`,
-              ),
-              fallbackText: event.payload.detail,
-            }
-          : undefined;
+      const assistantCompletion = yield* (() => {
+        if (event.type !== "item.completed" || event.payload.itemType !== "assistant_message") {
+          return Effect.succeed(undefined);
+        }
+        const turnId = toTurnId(event.turnId);
+        return Effect.gen(function* () {
+          const segment = turnId ? yield* getAssistantSegment(thread.id, turnId) : 0;
+          const baseId = event.itemId ?? event.turnId ?? event.eventId;
+          return {
+            messageId: MessageId.makeUnsafe(
+              segment > 0 ? `assistant:${baseId}:${segment}` : `assistant:${baseId}`,
+            ),
+            fallbackText: event.payload.detail,
+          };
+        });
+      })();
       const proposedPlanCompletion =
         event.type === "turn.proposed.completed"
           ? {
@@ -1124,6 +1163,7 @@ const make = Effect.gen(function* () {
             { concurrency: 1 },
           ).pipe(Effect.asVoid);
           yield* clearAssistantMessageIdsForTurn(thread.id, turnId);
+          yield* clearAssistantSegment(thread.id, turnId);
 
           yield* finalizeBufferedProposedPlan({
             event,
@@ -1207,6 +1247,59 @@ const make = Effect.gen(function* () {
               createdAt: now,
             });
           }
+        }
+      }
+
+      // When a tool starts while there is an active streaming assistant message,
+      // finalize the current message and bump the segment counter so the next
+      // assistant text creates a new message — splitting the work log around it.
+      if (event.type === "item.started" && isToolLifecycleItemType(event.payload.itemType)) {
+        const turnId = toTurnId(event.turnId);
+        if (turnId) {
+          const messageIds = yield* getAssistantMessageIdsForTurn(thread.id, turnId);
+          for (const messageId of messageIds) {
+            const existingMessage = thread.messages.find((entry) => entry.id === messageId);
+            if (!existingMessage?.streaming) continue;
+
+            // Check whether the message or its buffer contain visible text.
+            // If only thinking/reasoning was received, skip the split to avoid
+            // creating an "(empty response)" message in the UI.
+            const bufferedText = yield* peekBufferedAssistantText(messageId);
+            const hasVisibleText = existingMessage.text.length > 0 || bufferedText.length > 0;
+            if (!hasVisibleText) continue;
+
+            yield* finalizeAssistantMessage({
+              event,
+              threadId: thread.id,
+              messageId,
+              turnId,
+              createdAt: now,
+              commandTag: "assistant-complete-segment",
+              finalDeltaCommandTag: "assistant-delta-finalize-segment",
+            });
+            yield* forgetAssistantMessageId(thread.id, turnId, messageId);
+            yield* incrementAssistantSegment(thread.id, turnId);
+          }
+        }
+      }
+
+      // When the agent changes plan mode via EnterPlanMode/ExitPlanMode tools,
+      // update the thread's interaction mode so the UI reflects the change.
+      if (
+        event.type === "item.completed" &&
+        typeof event.payload.data === "object" &&
+        event.payload.data !== null &&
+        "toolName" in event.payload.data
+      ) {
+        const toolName = (event.payload.data as { toolName?: string }).toolName;
+        if (toolName === "ExitPlanMode" || toolName === "EnterPlanMode") {
+          yield* orchestrationEngine.dispatch({
+            type: "thread.interaction-mode.set",
+            commandId: providerCommandId(event, "plan-mode-change"),
+            threadId: thread.id,
+            interactionMode: toolName === "EnterPlanMode" ? "plan" : "default",
+            createdAt: event.createdAt,
+          });
         }
       }
 

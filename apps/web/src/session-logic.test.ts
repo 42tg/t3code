@@ -441,6 +441,7 @@ describe("deriveTimelineEntries", () => {
           role: "assistant",
           text: "hello",
           createdAt: "2026-02-23T00:00:01.000Z",
+          completedAt: "2026-02-23T00:00:01.000Z",
           streaming: false,
         },
       ],
@@ -470,6 +471,64 @@ describe("deriveTimelineEntries", () => {
         planMarkdown: "# Ship it",
       },
     });
+  });
+
+  it("places completed assistant messages between work entries by completedAt", () => {
+    const entries = deriveTimelineEntries(
+      [
+        {
+          id: MessageId.makeUnsafe("assistant-1"),
+          role: "assistant",
+          text: "Let me explore...",
+          createdAt: "2026-02-23T00:00:01.000Z",
+          completedAt: "2026-02-23T00:00:05.000Z",
+          streaming: false,
+        },
+      ],
+      [],
+      [
+        {
+          id: "work-before",
+          createdAt: "2026-02-23T00:00:03.000Z",
+          label: "Reasoning update",
+          tone: "thinking",
+        },
+        {
+          id: "work-after",
+          createdAt: "2026-02-23T00:00:07.000Z",
+          label: "Ran tests",
+          tone: "tool",
+        },
+      ],
+    );
+
+    expect(entries.map((entry) => entry.kind)).toEqual(["work", "message", "work"]);
+    expect(entries.map((entry) => entry.id)).toEqual(["work-before", "assistant-1", "work-after"]);
+  });
+
+  it("keeps streaming assistant message at the end of the timeline", () => {
+    const entries = deriveTimelineEntries(
+      [
+        {
+          id: MessageId.makeUnsafe("assistant-1"),
+          role: "assistant",
+          text: "Working on it...",
+          createdAt: "2026-02-23T00:00:01.000Z",
+          streaming: true,
+        },
+      ],
+      [],
+      [
+        {
+          id: "work-1",
+          createdAt: "2026-02-23T00:00:03.000Z",
+          label: "Ran tests",
+          tone: "tool",
+        },
+      ],
+    );
+
+    expect(entries.map((entry) => entry.kind)).toEqual(["work", "message"]);
   });
 });
 

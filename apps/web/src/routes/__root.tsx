@@ -286,6 +286,22 @@ function EventRouter() {
         needsProviderInvalidation = true;
         void queryClient.invalidateQueries({ queryKey: gitQueryKeys.all });
       }
+      // Sync the composer draft store when the agent changes interaction mode
+      // (e.g. ExitPlanMode tool resets plan → default).
+      if (event.type === "thread.interaction-mode-set" && event.payload) {
+        const payload = event.payload as {
+          threadId?: string;
+          interactionMode?: string;
+        };
+        if (payload.threadId && payload.interactionMode) {
+          useComposerDraftStore
+            .getState()
+            .setInteractionMode(
+              payload.threadId as ThreadId,
+              payload.interactionMode as "default" | "plan",
+            );
+        }
+      }
       domainEventFlushThrottler.maybeExecute();
     });
     const unsubTerminalEvent = api.terminal.onEvent((event) => {

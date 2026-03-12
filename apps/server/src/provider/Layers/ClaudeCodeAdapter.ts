@@ -108,6 +108,7 @@ interface ClaudeSessionContext {
   lastAssistantUuid: string | undefined;
   lastThreadStartedId: string | undefined;
   stopped: boolean;
+  interactionMode: "default" | "plan" | undefined;
 }
 
 interface ClaudeQueryRuntime extends AsyncIterable<SDKMessage> {
@@ -152,6 +153,34 @@ function asCanonicalTurnId(value: TurnId): TurnId {
 
 function asRuntimeRequestId(value: ApprovalRequestId): RuntimeRequestId {
   return RuntimeRequestId.makeUnsafe(value);
+}
+
+/** Tools allowed in plan mode — read-only exploration + plan lifecycle. */
+const PLAN_MODE_ALLOWED_TOOLS = new Set([
+  "Read",
+  "Glob",
+  "Grep",
+  "Bash", // plan mode needs Bash for read-only commands (git log, ls, etc.)
+  "ExitPlanMode",
+  "EnterPlanMode",
+  "EnterWorktree",
+  "ExitWorktree",
+  "Agent",
+  "TaskCreate",
+  "TaskGet",
+  "TaskList",
+  "TaskUpdate",
+  "WebFetch",
+  "WebSearch",
+  "LSP",
+]);
+
+function isPlanModeAllowedTool(toolName: string): boolean {
+  // Allow built-in plan-safe tools
+  if (PLAN_MODE_ALLOWED_TOOLS.has(toolName)) return true;
+  // Allow all MCP tools (they're user-provided and may be read-only)
+  if (toolName.startsWith("mcp__")) return true;
+  return false;
 }
 
 function toPermissionMode(value: unknown): PermissionMode | undefined {
@@ -925,6 +954,13 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
             }
           }
 
+          // Track when the agent changes plan mode via tools
+          if (tool.toolName === "ExitPlanMode") {
+            context.interactionMode = "default";
+          } else if (tool.toolName === "EnterPlanMode") {
+            context.interactionMode = "plan";
+          }
+
           const stamp = yield* makeEventStamp();
           yield* offerRuntimeEvent({
             type: "item.completed",
@@ -1470,6 +1506,21 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
 
               const runtimeMode = input.runtimeMode ?? "full-access";
               if (runtimeMode === "full-access") {
+                if (context.interactionMode === "plan") {
+                  // In plan mode: allow read-only tools, deny write/execute tools.
+                  // The model gets plan mode system reminders from the CLI, but we
+                  // enforce tool restrictions here as a hard guardrail.
+                  if (isPlanModeAllowedTool(toolName)) {
+                    return {
+                      behavior: "allow",
+                      updatedInput: toolInput,
+                    } satisfies PermissionResult;
+                  }
+                  return {
+                    behavior: "deny",
+                    message: "Tool execution is not allowed in plan mode. Use ExitPlanMode to leave plan mode first.",
+                  } satisfies PermissionResult;
+                }
                 return {
                   behavior: "allow",
                   updatedInput: toolInput,
@@ -1599,9 +1650,12 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
           );
 
         const providerOptions = input.providerOptions?.claudeCode;
-        const permissionMode =
-          toPermissionMode(providerOptions?.permissionMode) ??
-          (input.runtimeMode === "full-access" ? "bypassPermissions" : undefined);
+        // We intentionally do NOT set permissionMode to "bypassPermissions" here even for
+        // full-access mode. Instead, tool permissions are handled by the canUseTool callback
+        // which auto-allows in full-access mode. This ensures that setPermissionMode("plan")
+        // actually restricts tool execution (the CLI's isBypassPermissionsModeAvailable flag
+        // would otherwise override plan mode restrictions).
+        const permissionMode = toPermissionMode(providerOptions?.permissionMode);
 
         const resolvedPlugins = resolveEnabledPlugins(input.cwd ? { cwd: input.cwd } : undefined);
         const sdkPlugins = resolvedPlugins.map((p) => ({ type: "local" as const, path: p.path }));
@@ -1677,6 +1731,7 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
           lastAssistantUuid: resumeState?.resumeSessionAt,
           lastThreadStartedId: undefined,
           stopped: false,
+          interactionMode: undefined,
         };
         yield* Ref.set(contextRef, context);
         sessions.set(threadId, context);
@@ -1749,6 +1804,17 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
             try: () => context.query.setModel(input.model),
             catch: (cause) => toRequestError(input.threadId, "turn/setModel", cause),
           });
+        }
+
+        if (input.interactionMode) {
+          context.interactionMode = input.interactionMode === "plan" ? "plan" : "default";
+          const permissionMode = toPermissionMode(input.interactionMode);
+          if (permissionMode) {
+            yield* Effect.tryPromise({
+              try: () => context.query.setPermissionMode(permissionMode),
+              catch: (cause) => toRequestError(input.threadId, "turn/setPermissionMode", cause),
+            });
+          }
         }
 
         const turnId = TurnId.makeUnsafe(yield* Random.nextUUIDv4);

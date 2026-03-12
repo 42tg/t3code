@@ -438,6 +438,7 @@ const make = Effect.gen(function* () {
   ) {
     const key = turnStartKeyForEvent(event);
     if (yield* hasHandledTurnStartRecently(key)) {
+      yield* Effect.logInfo("processTurnStartRequested: skipped (handled recently)");
       return;
     }
 
