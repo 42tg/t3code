@@ -17,3 +17,5 @@ apps/web/.playwright
 apps/web/playwright-report
 apps/web/src/components/__screenshots__
 *.local.*
+**/coverage/
+.playwright-mcp/
