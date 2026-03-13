@@ -10,7 +10,7 @@ import {
   TerminalIcon,
   TriangleAlertIcon,
 } from "lucide-react";
-import { ClaudeAI, CursorIcon, OpenAI } from "./Icons";
+import { ClaudeAI, CursorIcon, JiraIcon, OpenAI } from "./Icons";
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import {
   DndContext,
@@ -34,6 +34,7 @@ import {
   ProjectId,
   ThreadId,
   type GitStatusResult,
+  type LinkedJiraTicket,
   type ResolvedKeybindingsConfig,
 } from "@t3tools/contracts";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -171,6 +172,30 @@ function prStatusIndicator(pr: ThreadPr): PrStatusIndicator | null {
     };
   }
   return null;
+}
+
+interface JiraStatusIndicator {
+  label: string;
+  colorClass: string;
+  tooltip: string;
+}
+
+function jiraStatusIndicator(
+  ticket: LinkedJiraTicket | null | undefined,
+): JiraStatusIndicator | null {
+  if (!ticket) return null;
+  if (ticket.status === "completed") {
+    return {
+      label: "Jira completed",
+      colorClass: "text-emerald-600 dark:text-emerald-400",
+      tooltip: `${ticket.key}: ${ticket.title} (completed)`,
+    };
+  }
+  return {
+    label: "Jira active",
+    colorClass: "text-blue-600 dark:text-blue-400",
+    tooltip: `${ticket.key}: ${ticket.title}`,
+  };
 }
 
 function T3Wordmark() {
@@ -1624,6 +1649,7 @@ export default function Sidebar() {
                                 const prStatus = prStatusIndicator(
                                   prByThreadId.get(thread.id) ?? null,
                                 );
+                                const jiraStatus = jiraStatusIndicator(thread.linkedJiraTicket);
                                 const terminalStatus = terminalStatusFromRunningIds(
                                   selectThreadTerminalState(terminalStateByThreadId, thread.id)
                                     .runningTerminalIds,
@@ -1705,6 +1731,23 @@ export default function Sidebar() {
                                             />
                                             <TooltipPopup side="top">
                                               {prStatus.tooltip}
+                                            </TooltipPopup>
+                                          </Tooltip>
+                                        )}
+                                        {jiraStatus && (
+                                          <Tooltip>
+                                            <TooltipTrigger
+                                              render={
+                                                <span
+                                                  aria-label={jiraStatus.tooltip}
+                                                  className={`inline-flex items-center justify-center ${jiraStatus.colorClass}`}
+                                                >
+                                                  <JiraIcon className="size-3" />
+                                                </span>
+                                              }
+                                            />
+                                            <TooltipPopup side="top">
+                                              {jiraStatus.tooltip}
                                             </TooltipPopup>
                                           </Tooltip>
                                         )}

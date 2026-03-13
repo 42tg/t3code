@@ -112,7 +112,11 @@ export class WsTransport {
     this.connect();
   }
 
-  async request<T = unknown>(method: string, params?: unknown): Promise<T> {
+  async request<T = unknown>(
+    method: string,
+    params?: unknown,
+    options?: { timeoutMs?: number },
+  ): Promise<T> {
     if (typeof method !== "string" || method.length === 0) {
       throw new Error("Request method is required");
     }
@@ -126,7 +130,7 @@ export class WsTransport {
       const timeout = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error(`Request timed out: ${method}`));
-      }, REQUEST_TIMEOUT_MS);
+      }, options?.timeoutMs ?? REQUEST_TIMEOUT_MS);
 
       this.pending.set(id, {
         resolve: resolve as (result: unknown) => void,

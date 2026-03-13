@@ -51,6 +51,24 @@ import type {
   OrchestrationEvent,
   OrchestrationReadModel,
 } from "./orchestration";
+import type {
+  JiraIssueViewInput,
+  JiraIssueViewResult,
+  JiraIssueCreateInput,
+  JiraIssueCreateResult,
+  JiraIssueMoveInput,
+  JiraIssueMoveResult,
+  JiraCommentAddInput,
+  JiraCommentAddResult,
+  JiraIssueListInput,
+  JiraIssueListResult,
+  JiraListTransitionsInput,
+  JiraListTransitionsResult,
+  JiraGenerateTicketContentInput,
+  JiraGenerateTicketContentResult,
+  JiraGenerateProgressCommentInput,
+  JiraGenerateProgressCommentResult,
+} from "./jira";
 import { EditorId, type OpenInWarpInput } from "./editor";
 
 export interface ContextMenuItem<T extends string = string> {
@@ -161,6 +179,21 @@ export interface NativeApi {
     // GitHub PR API
     fetchPrDetails: (input: GitFetchPrDetailsInput) => Promise<GitFetchPrDetailsResult>;
     listOpenPrs: (input: GitListOpenPrsInput) => Promise<GitListOpenPrsResult>;
+  };
+  jira: {
+    isConfigured: () => Promise<{ configured: boolean }>;
+    viewIssue: (input: JiraIssueViewInput) => Promise<JiraIssueViewResult>;
+    createIssue: (input: JiraIssueCreateInput) => Promise<JiraIssueCreateResult>;
+    moveIssue: (input: JiraIssueMoveInput) => Promise<JiraIssueMoveResult>;
+    addComment: (input: JiraCommentAddInput) => Promise<JiraCommentAddResult>;
+    listIssues: (input: JiraIssueListInput) => Promise<JiraIssueListResult>;
+    listTransitions: (input: JiraListTransitionsInput) => Promise<JiraListTransitionsResult>;
+    generateTicketContent: (
+      input: JiraGenerateTicketContentInput,
+    ) => Promise<JiraGenerateTicketContentResult>;
+    generateProgressComment: (
+      input: JiraGenerateProgressCommentInput,
+    ) => Promise<JiraGenerateProgressCommentResult>;
   };
   contextMenu: {
     show: <T extends string>(

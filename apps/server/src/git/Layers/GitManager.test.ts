@@ -64,6 +64,15 @@ interface FakeGitTextGeneration {
     cwd: string;
     message: string;
   }) => Effect.Effect<{ branch: string }, TextGenerationError>;
+  generateJiraTicketContent?: (input: {
+    conversationContext: string;
+    projectKey: string;
+  }) => Effect.Effect<{ summary: string; description: string }, TextGenerationError>;
+  generateJiraProgressComment?: (input: {
+    ticketKey: string;
+    ticketTitle: string;
+    recentConversation: string;
+  }) => Effect.Effect<{ comment: string }, TextGenerationError>;
 }
 
 type FakePullRequest = NonNullable<FakeGhScenario["pullRequest"]>;
@@ -167,6 +176,15 @@ function createTextGeneration(overrides: Partial<FakeGitTextGeneration> = {}): T
       Effect.succeed({
         branch: "update-workflow",
       }),
+    generateJiraTicketContent: () =>
+      Effect.succeed({
+        summary: "Mock summary",
+        description: "Mock description",
+      }),
+    generateJiraProgressComment: () =>
+      Effect.succeed({
+        comment: "Mock progress",
+      }),
     ...overrides,
   };
 
@@ -199,6 +217,34 @@ function createTextGeneration(overrides: Partial<FakeGitTextGeneration> = {}): T
           (cause) =>
             new TextGenerationError({
               operation: "generateBranchName",
+              detail: "fake text generation failed",
+              ...(cause !== undefined ? { cause } : {}),
+            }),
+        ),
+      ),
+    generateJiraTicketContent: (input) =>
+      (
+        implementation.generateJiraTicketContent ??
+        (() => Effect.succeed({ summary: "Mock summary", description: "Mock description" }))
+      )(input).pipe(
+        Effect.mapError(
+          (cause) =>
+            new TextGenerationError({
+              operation: "generateJiraTicketContent",
+              detail: "fake text generation failed",
+              ...(cause !== undefined ? { cause } : {}),
+            }),
+        ),
+      ),
+    generateJiraProgressComment: (input) =>
+      (
+        implementation.generateJiraProgressComment ??
+        (() => Effect.succeed({ comment: "Mock progress" }))
+      )(input).pipe(
+        Effect.mapError(
+          (cause) =>
+            new TextGenerationError({
+              operation: "generateJiraProgressComment",
               detail: "fake text generation failed",
               ...(cause !== undefined ? { cause } : {}),
             }),
@@ -380,7 +426,7 @@ function createGitHubCliWithFakeGh(scenario: FakeGhScenario = {}): {
             "pr",
             "list",
             "--head",
-            input.headSelector,
+            input.headSelector ?? "",
             "--state",
             "open",
             "--limit",

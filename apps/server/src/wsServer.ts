@@ -47,6 +47,7 @@ import { WebSocketServer, type WebSocket } from "ws";
 
 import { createLogger } from "./logger";
 import { GitManager } from "./git/Services/GitManager.ts";
+import { JiraManager } from "./jira/Services/JiraManager.ts";
 import { TerminalManager } from "./terminal/Services/Manager.ts";
 import { Keybindings } from "./keybindings";
 import { searchWorkspaceEntries } from "./workspaceEntries";
@@ -155,6 +156,26 @@ function websocketRawToString(raw: unknown): string | null {
 }
 
 /**
+ * Format thread messages as a plain-text conversation context for AI generation.
+ * Takes the most recent messages up to `maxChars` total.
+ */
+function formatThreadContext(
+  messages: ReadonlyArray<{ role: string; text: string }>,
+  maxChars: number,
+): string {
+  const lines: string[] = [];
+  let totalChars = 0;
+  // Walk backwards from most recent to stay within budget
+  for (let i = messages.length - 1; i >= 0 && totalChars < maxChars; i--) {
+    const msg = messages[i]!;
+    const line = `[${msg.role}]: ${msg.text}`;
+    lines.unshift(line);
+    totalChars += line.length;
+  }
+  return lines.join("\n\n");
+}
+
+/**
  * Best-effort extraction of the request `id` from raw JSON text.
  * Used so that schema validation errors can be sent back with the
  * correct request id instead of "unknown".
@@ -236,6 +257,7 @@ export type ServerCoreRuntimeServices =
 export type ServerRuntimeServices =
   | ServerCoreRuntimeServices
   | GitManager
+  | JiraManager
   | GitCore
   | GitHubCli
   | TerminalManager
@@ -275,6 +297,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const availableEditors = resolveAvailableEditors();
 
   const gitManager = yield* GitManager;
+  const jiraManager = yield* JiraManager;
   const terminalManager = yield* TerminalManager;
   const keybindingsManager = yield* Keybindings;
   const providerHealth = yield* ProviderHealth;
@@ -895,6 +918,66 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           limit: 30,
         });
         return { pullRequests };
+      }
+
+      case WS_METHODS.jiraIsConfigured: {
+        const baseUrl = process.env.JIRA_BASE_URL;
+        const email = process.env.JIRA_USER_EMAIL;
+        const token = process.env.JIRA_API_TOKEN;
+        return { configured: !!(baseUrl && email && token) };
+      }
+
+      case WS_METHODS.jiraViewIssue: {
+        const body = stripRequestTag(request.body);
+        return yield* jiraManager.viewIssue(body);
+      }
+
+      case WS_METHODS.jiraCreateIssue: {
+        const body = stripRequestTag(request.body);
+        return yield* jiraManager.createIssue(body);
+      }
+
+      case WS_METHODS.jiraMoveIssue: {
+        const body = stripRequestTag(request.body);
+        return yield* jiraManager.moveIssue(body);
+      }
+
+      case WS_METHODS.jiraAddComment: {
+        const body = stripRequestTag(request.body);
+        return yield* jiraManager.addComment(body);
+      }
+
+      case WS_METHODS.jiraListIssues: {
+        const body = stripRequestTag(request.body);
+        return yield* jiraManager.listIssues(body);
+      }
+
+      case WS_METHODS.jiraListTransitions: {
+        const body = stripRequestTag(request.body);
+        return yield* jiraManager.listTransitions(body);
+      }
+
+      case WS_METHODS.jiraGenerateTicketContent: {
+        const body = stripRequestTag(request.body);
+        const snapshot = yield* projectionReadModelQuery.getSnapshot();
+        const thread = snapshot.threads.find((t) => t.id === body.threadId);
+        const conversationContext = thread ? formatThreadContext(thread.messages, 20_000) : "";
+        return yield* jiraManager.generateTicketContent({
+          conversationContext,
+          projectKey: body.projectKey,
+        });
+      }
+
+      case WS_METHODS.jiraGenerateProgressComment: {
+        const body = stripRequestTag(request.body);
+        const snapshot = yield* projectionReadModelQuery.getSnapshot();
+        const thread = snapshot.threads.find((t) => t.id === body.threadId);
+        const recentConversation = thread ? formatThreadContext(thread.messages, 20_000) : "";
+        return yield* jiraManager.generateProgressComment({
+          ticketKey: body.ticketKey,
+          ticketTitle: body.ticketTitle,
+          recentConversation,
+        });
       }
 
       case WS_METHODS.terminalOpen: {
