@@ -376,7 +376,7 @@ function shortenToolSummary(value: string): string {
     const parts = result.split("/").filter(Boolean);
     result = parts.length > 3 ? `…/${parts.slice(-3).join("/")}` : result;
   }
-  return result.length > 100 ? `${result.slice(0, 97)}…` : result;
+  return result.length > 80 ? `${result.slice(0, 77)}…` : result;
 }
 
 function ToolCallRow({ entry, isLive }: { entry: WorkLogEntry; isLive: boolean }) {
