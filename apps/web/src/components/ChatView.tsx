@@ -406,19 +406,13 @@ function ToolCallRow({ entry, isLive }: { entry: WorkLogEntry; isLive: boolean }
     >
       <button
         type="button"
-        className="flex w-full items-start gap-1.5 rounded-md px-2 py-1 text-left transition-colors duration-100 hover:bg-muted/30"
+        className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left transition-colors duration-100 hover:bg-muted/30"
         onClick={() => setExpanded(!expanded)}
       >
-        <ChevronRightIcon
-          className={cn(
-            "mt-[3px] h-3 w-3 shrink-0 text-muted-foreground/40 transition-transform duration-150",
-            expanded && "rotate-90",
-          )}
-        />
         <StatusIndicator status={entry.status} isLive={isLive} />
         <Icon
           className={cn(
-            "mt-[2px] h-3.5 w-3.5 shrink-0",
+            "h-3.5 w-3.5 shrink-0",
             isLive
               ? "text-blue-400"
               : entry.status === "failed"
@@ -1171,7 +1165,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const lockedProvider: ProviderKind | null = hasThreadStarted
     ? (sessionProvider ?? selectedProviderByThreadId ?? null)
     : null;
-  const selectedProvider: ProviderKind = lockedProvider ?? selectedProviderByThreadId ?? "claudeCode";
+  const selectedProvider: ProviderKind =
+    lockedProvider ?? selectedProviderByThreadId ?? "claudeCode";
   const baseThreadModel = resolveModelSlugForProvider(
     selectedProvider,
     activeThread?.model ?? activeProject?.model ?? getDefaultModel(selectedProvider),
@@ -5875,6 +5870,13 @@ const MessagesTimeline = memo(function MessagesTimeline({
     }));
   }, []);
 
+  const lastWorkRowId = useMemo(() => {
+    for (let i = rows.length - 1; i >= 0; i--) {
+      if (rows[i]!.kind === "work" || rows[i]!.kind === "agent-execution") return rows[i]!.id;
+    }
+    return null;
+  }, [rows]);
+
   const renderRowContent = (row: TimelineRow) => (
     <div
       className="pb-4"
@@ -5923,7 +5925,11 @@ const MessagesTimeline = memo(function MessagesTimeline({
                   <ToolCallRow
                     key={workEntry.id}
                     entry={workEntry}
-                    isLive={idx === visibleEntries.length - 1 && isWorking}
+                    isLive={
+                      idx === visibleEntries.length - 1 &&
+                      isWorking &&
+                      row.id === lastWorkRowId
+                    }
                   />
                 ))}
               </div>
