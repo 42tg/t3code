@@ -368,6 +368,17 @@ function StatusIndicator({
   return <CheckIcon className="h-3 w-3 shrink-0 text-muted-foreground/30" />;
 }
 
+/** Shorten an absolute path or long command to a readable inline summary. */
+function shortenToolSummary(value: string): string {
+  let result = value;
+  // Absolute paths: show last 2-3 segments
+  if (result.startsWith("/")) {
+    const parts = result.split("/").filter(Boolean);
+    result = parts.length > 3 ? `…/${parts.slice(-3).join("/")}` : result;
+  }
+  return result.length > 100 ? `${result.slice(0, 97)}…` : result;
+}
+
 function ToolCallRow({ entry, isLive }: { entry: WorkLogEntry; isLive: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const Icon = toolIcon(entry.toolName, entry.itemType);
@@ -426,7 +437,7 @@ function ToolCallRow({ entry, isLive }: { entry: WorkLogEntry; isLive: boolean }
           </span>
           {(filePath || entry.command) && (
             <span className="ml-2 truncate font-mono text-[11px] text-muted-foreground/45">
-              {filePath || entry.command}
+              {shortenToolSummary(filePath || entry.command || "")}
             </span>
           )}
         </div>
@@ -439,17 +450,7 @@ function ToolCallRow({ entry, isLive }: { entry: WorkLogEntry; isLive: boolean }
 
       {expanded && (
         <div className="mb-1 ml-7 mt-1 overflow-hidden rounded-md border border-border/60 bg-background/60 text-[11px]">
-          {entry.command && (
-            <>
-              <div className="border-b border-border/40 bg-muted/20 px-2.5 py-1 text-[10px] uppercase tracking-wider text-muted-foreground/50">
-                Command
-              </div>
-              <pre className="whitespace-pre-wrap px-2.5 py-2 font-mono text-[11px] leading-relaxed text-foreground/70">
-                {entry.command}
-              </pre>
-            </>
-          )}
-          {entry.detail && entry.detail !== entry.command && (
+          {entry.detail ? (
             <>
               <div className="border-b border-border/40 bg-muted/20 px-2.5 py-1 text-[10px] uppercase tracking-wider text-muted-foreground/50">
                 Detail
@@ -458,6 +459,17 @@ function ToolCallRow({ entry, isLive }: { entry: WorkLogEntry; isLive: boolean }
                 {entry.detail}
               </pre>
             </>
+          ) : (
+            entry.command && (
+              <>
+                <div className="border-b border-border/40 bg-muted/20 px-2.5 py-1 text-[10px] uppercase tracking-wider text-muted-foreground/50">
+                  Command
+                </div>
+                <pre className="whitespace-pre-wrap px-2.5 py-2 font-mono text-[11px] leading-relaxed text-foreground/70">
+                  {entry.command}
+                </pre>
+              </>
+            )
           )}
           {entry.changedFiles && entry.changedFiles.length > 0 && (
             <div className="flex flex-wrap gap-1 border-t border-border/40 px-2.5 py-1.5">

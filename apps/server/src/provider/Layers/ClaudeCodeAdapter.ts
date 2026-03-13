@@ -306,16 +306,6 @@ function summarizeToolRequest(toolName: string, input: Record<string, unknown>):
   return `${toolName}: ${serialized.slice(0, 397)}...`;
 }
 
-function rebuildToolDetail(toolName: string, chunks: string[]): string | undefined {
-  const rawJson = chunks.join("");
-  try {
-    const parsedInput = JSON.parse(rawJson) as Record<string, unknown>;
-    return summarizeToolRequest(toolName, parsedInput);
-  } catch {
-    return undefined;
-  }
-}
-
 function titleForTool(itemType: CanonicalItemType, toolName?: string): string {
   if (toolName) {
     return toolName;
@@ -977,11 +967,18 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
           }
           context.inFlightTools.delete(index);
 
-          // Rebuild detail from accumulated input JSON if available
+          // Rebuild detail and structured input from accumulated input JSON if available
+          let parsedToolInput: Record<string, unknown> | undefined;
           if (tool.inputJsonChunks.length > 0) {
-            const rebuilt = rebuildToolDetail(tool.toolName, tool.inputJsonChunks);
-            if (rebuilt) {
+            try {
+              parsedToolInput = JSON.parse(tool.inputJsonChunks.join("")) as Record<
+                string,
+                unknown
+              >;
+              const rebuilt = summarizeToolRequest(tool.toolName, parsedToolInput);
               tool.detail = rebuilt;
+            } catch {
+              // leave detail as-is
             }
           }
 
@@ -1009,6 +1006,7 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
               ...(tool.detail ? { detail: tool.detail } : {}),
               data: {
                 toolName: tool.toolName,
+                ...(parsedToolInput ? { item: { input: parsedToolInput } } : {}),
               },
             },
             providerRefs: {

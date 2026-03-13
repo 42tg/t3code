@@ -551,8 +551,43 @@ function extractToolCommand(payload: Record<string, unknown> | null): string | n
     normalizeCommandValue(itemInput?.command),
     normalizeCommandValue(itemResult?.command),
     normalizeCommandValue(data?.command),
+    // For Read/Edit/Write: show file path
+    normalizeCommandValue(itemInput?.file_path),
+    normalizeCommandValue(itemInput?.filePath),
+    // For Grep: show pattern
+    normalizeCommandValue(itemInput?.pattern),
+    // For Glob: show pattern
+    normalizeCommandValue(itemInput?.glob),
+    // For Agent: show description or prompt snippet
+    normalizeCommandValue(itemInput?.description),
   ];
-  return candidates.find((candidate) => candidate !== null) ?? null;
+  const fromStructured = candidates.find((candidate) => candidate !== null) ?? null;
+  if (fromStructured) return fromStructured;
+
+  // Fallback: parse the detail string (e.g. "Bash: ls /tmp" or "Read: {\"file_path\":\"/foo\"}")
+  const detail = asTrimmedString(payload?.detail);
+  if (detail) {
+    const colonIdx = detail.indexOf(": ");
+    if (colonIdx >= 0) {
+      const after = detail.slice(colonIdx + 2);
+      // If the detail value is JSON, try to extract a useful field
+      if (after.startsWith("{")) {
+        try {
+          const parsed = JSON.parse(after) as Record<string, unknown>;
+          const fallback =
+            normalizeCommandValue(parsed.command) ??
+            normalizeCommandValue(parsed.file_path) ??
+            normalizeCommandValue(parsed.pattern) ??
+            normalizeCommandValue(parsed.description);
+          if (fallback) return fallback;
+        } catch {
+          // not valid JSON, use raw
+        }
+      }
+      return after;
+    }
+  }
+  return null;
 }
 
 function pushChangedFile(target: string[], seen: Set<string>, value: unknown) {
