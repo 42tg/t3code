@@ -5926,9 +5926,7 @@ const MessagesTimeline = memo(function MessagesTimeline({
                     key={workEntry.id}
                     entry={workEntry}
                     isLive={
-                      idx === visibleEntries.length - 1 &&
-                      isWorking &&
-                      row.id === lastWorkRowId
+                      idx === visibleEntries.length - 1 && isWorking && row.id === lastWorkRowId
                     }
                   />
                 ))}

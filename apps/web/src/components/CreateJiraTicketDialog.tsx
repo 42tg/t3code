@@ -43,6 +43,24 @@ interface CreateJiraTicketDialogProps {
 
 type Mode = "link" | "create";
 
+const JIRA_PROJECT_KEY_STORAGE = "t3:jira:lastProjectKey";
+
+function getLastProjectKey(): string {
+  try {
+    return localStorage.getItem(JIRA_PROJECT_KEY_STORAGE) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function saveLastProjectKey(key: string) {
+  try {
+    localStorage.setItem(JIRA_PROJECT_KEY_STORAGE, key);
+  } catch {
+    // ignore
+  }
+}
+
 export function CreateJiraTicketDialog({
   threadId,
   onClose,
@@ -50,7 +68,7 @@ export function CreateJiraTicketDialog({
 }: CreateJiraTicketDialogProps) {
   const [mode, setMode] = useState<Mode>("link");
   const [keyInput, setKeyInput] = useState("");
-  const [projectKey, setProjectKey] = useState("");
+  const [projectKey, setProjectKey] = useState(getLastProjectKey);
   const [issueType, setIssueType] = useState("Task");
   const [summary, setSummary] = useState("");
   const [description, setDescription] = useState("");
@@ -85,6 +103,9 @@ export function CreateJiraTicketDialog({
 
   const linkExistingTicket = useCallback(() => {
     if (!issueQuery.data) return;
+    // Remember the project key from the linked ticket (e.g. "PROJ" from "PROJ-123")
+    const linkedProjectKey = issueQuery.data.key.split("-")[0];
+    if (linkedProjectKey) saveLastProjectKey(linkedProjectKey);
     dispatchLink({
       key: issueQuery.data.key,
       url: issueQuery.data.url,
@@ -105,6 +126,7 @@ export function CreateJiraTicketDialog({
         summary,
         description,
       });
+      saveLastProjectKey(projectKey);
       dispatchLink({
         key: result.key,
         url: result.url,
