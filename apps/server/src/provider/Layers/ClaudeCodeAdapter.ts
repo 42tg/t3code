@@ -126,6 +126,10 @@ interface ClaudeSessionContext {
   lastThreadStartedId: string | undefined;
   stopped: boolean;
   interactionMode: "default" | "plan" | undefined;
+  /** Maps task_id (from subagent tasks) to the Agent tool_use block ID */
+  readonly taskIdToParentToolUseId: Map<string, string>;
+  /** FIFO queue of Agent tool_use IDs awaiting their task_started event (handles parallel agents) */
+  readonly pendingAgentToolUseIds: string[];
 }
 
 interface ClaudeQueryRuntime extends AsyncIterable<SDKMessage> {
@@ -837,6 +841,9 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
           return;
         }
 
+        const parentToolUseId =
+          (message as { parent_tool_use_id?: string | null }).parent_tool_use_id ?? null;
+
         const { event } = message;
 
         if (event.type === "content_block_delta") {
@@ -864,6 +871,7 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
               threadId: context.session.threadId,
               turnId: context.turnState.turnId,
               itemId: asRuntimeItemId(context.turnState.assistantItemId),
+              parentToolUseId,
               payload: {
                 streamKind: streamKindFromDeltaType(event.delta.type),
                 delta: deltaText,
@@ -922,6 +930,11 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
           };
           context.inFlightTools.set(index, tool);
 
+          // Queue Agent tool_use ID so we can link the next task_started event (FIFO for parallel agents)
+          if (toolName === "Agent") {
+            context.pendingAgentToolUseIds.push(itemId);
+          }
+
           const stamp = yield* makeEventStamp();
           yield* offerRuntimeEvent({
             type: "item.started",
@@ -931,6 +944,7 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
             threadId: context.session.threadId,
             ...(context.turnState ? { turnId: asCanonicalTurnId(context.turnState.turnId) } : {}),
             itemId: asRuntimeItemId(tool.itemId),
+            parentToolUseId,
             payload: {
               itemType: tool.itemType,
               status: "inProgress",
@@ -987,6 +1001,7 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
             threadId: context.session.threadId,
             ...(context.turnState ? { turnId: asCanonicalTurnId(context.turnState.turnId) } : {}),
             itemId: asRuntimeItemId(tool.itemId),
+            parentToolUseId,
             payload: {
               itemType: tool.itemType,
               status: "completed",
@@ -1019,6 +1034,9 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
           return;
         }
 
+        const parentToolUseId =
+          (message as { parent_tool_use_id?: string | null }).parent_tool_use_id ?? null;
+
         if (context.turnState) {
           context.turnState.items.push(message.message);
           const fallbackAssistantText = extractAssistantText(message);
@@ -1041,6 +1059,7 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
             threadId: context.session.threadId,
             turnId: context.turnState.turnId,
             itemId: asRuntimeItemId(context.turnState.assistantItemId),
+            parentToolUseId,
             payload: {
               itemType: "assistant_message",
               status: "inProgress",
@@ -1179,10 +1198,17 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
               },
             });
             return;
-          case "task_started":
+          case "task_started": {
+            // Pop the next pending Agent tool_use ID from the FIFO queue
+            const nextAgentToolUseId = context.pendingAgentToolUseIds.shift();
+            if (nextAgentToolUseId) {
+              context.taskIdToParentToolUseId.set(message.task_id, nextAgentToolUseId);
+            }
+            const taskStartedParent = context.taskIdToParentToolUseId.get(message.task_id) ?? null;
             yield* offerRuntimeEvent({
               ...base,
               type: "task.started",
+              parentToolUseId: taskStartedParent,
               payload: {
                 taskId: RuntimeTaskId.makeUnsafe(message.task_id),
                 description: message.description,
@@ -1190,10 +1216,13 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
               },
             });
             return;
-          case "task_progress":
+          }
+          case "task_progress": {
+            const taskProgressParent = context.taskIdToParentToolUseId.get(message.task_id) ?? null;
             yield* offerRuntimeEvent({
               ...base,
               type: "task.progress",
+              parentToolUseId: taskProgressParent,
               payload: {
                 taskId: RuntimeTaskId.makeUnsafe(message.task_id),
                 description: message.description,
@@ -1202,10 +1231,14 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
               },
             });
             return;
-          case "task_notification":
+          }
+          case "task_notification": {
+            const taskNotificationParent =
+              context.taskIdToParentToolUseId.get(message.task_id) ?? null;
             yield* offerRuntimeEvent({
               ...base,
               type: "task.completed",
+              parentToolUseId: taskNotificationParent,
               payload: {
                 taskId: RuntimeTaskId.makeUnsafe(message.task_id),
                 status: message.status,
@@ -1213,7 +1246,10 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
                 ...(message.usage ? { usage: message.usage } : {}),
               },
             });
+            // Clean up the mapping for this completed task
+            context.taskIdToParentToolUseId.delete(message.task_id);
             return;
+          }
           case "files_persisted":
             yield* offerRuntimeEvent({
               ...base,
@@ -1677,7 +1713,8 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
                   }
                   return {
                     behavior: "deny",
-                    message: "Tool execution is not allowed in plan mode. Use ExitPlanMode to leave plan mode first.",
+                    message:
+                      "Tool execution is not allowed in plan mode. Use ExitPlanMode to leave plan mode first.",
                   } satisfies PermissionResult;
                 }
                 return {
@@ -1788,11 +1825,15 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
                 },
               });
 
-              if (approvalResponse.decision === "accept" || approvalResponse.decision === "acceptForSession") {
+              if (
+                approvalResponse.decision === "accept" ||
+                approvalResponse.decision === "acceptForSession"
+              ) {
                 return {
                   behavior: "allow",
                   updatedInput: toolInput,
-                  ...(approvalResponse.decision === "acceptForSession" && pendingApproval.suggestions
+                  ...(approvalResponse.decision === "acceptForSession" &&
+                  pendingApproval.suggestions
                     ? { updatedPermissions: [...pendingApproval.suggestions] }
                     : {}),
                 } satisfies PermissionResult;
@@ -1803,7 +1844,7 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
                 message:
                   approvalResponse.decision === "cancel"
                     ? "User cancelled tool execution."
-                    : approvalResponse.feedback ?? "User declined tool execution.",
+                    : (approvalResponse.feedback ?? "User declined tool execution."),
               } satisfies PermissionResult;
             }),
           );
@@ -1892,6 +1933,8 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
           lastThreadStartedId: undefined,
           stopped: false,
           interactionMode: undefined,
+          taskIdToParentToolUseId: new Map(),
+          pendingAgentToolUseIds: [],
         };
         yield* Ref.set(contextRef, context);
         sessions.set(threadId, context);
@@ -2069,10 +2112,7 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
         }
 
         context.pendingApprovals.delete(requestId);
-        yield* Deferred.succeed(
-          pending.decision,
-          feedback ? { decision, feedback } : { decision },
-        );
+        yield* Deferred.succeed(pending.decision, feedback ? { decision, feedback } : { decision });
       });
 
     const respondToUserInput: ClaudeCodeAdapterShape["respondToUserInput"] = (

@@ -96,7 +96,8 @@ export class WsTransport {
   constructor(url?: string) {
     const bridgeUrl = window.desktopBridge?.getWsUrl();
     const envUrl = import.meta.env.VITE_WS_URL as string | undefined;
-    const isRemote = window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1";
+    const isRemote =
+      window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1";
     const locationWsUrl = `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.hostname}:${window.location.port}`;
     const baseUrl =
       url ??

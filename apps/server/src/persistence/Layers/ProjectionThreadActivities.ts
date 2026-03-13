@@ -43,6 +43,8 @@ const makeProjectionThreadActivityRepository = Effect.gen(function* () {
               summary,
               payload_json,
               sequence,
+              parent_tool_use_id,
+              item_id,
               created_at
             )
             VALUES (
@@ -54,6 +56,8 @@ const makeProjectionThreadActivityRepository = Effect.gen(function* () {
               ${row.summary},
               ${JSON.stringify(row.payload)},
               ${row.sequence ?? null},
+              ${row.parentToolUseId},
+              ${row.itemId},
               ${row.createdAt}
             )
             ON CONFLICT (activity_id)
@@ -65,6 +69,8 @@ const makeProjectionThreadActivityRepository = Effect.gen(function* () {
               summary = excluded.summary,
               payload_json = excluded.payload_json,
               sequence = excluded.sequence,
+              parent_tool_use_id = excluded.parent_tool_use_id,
+              item_id = excluded.item_id,
               created_at = excluded.created_at
           `,
   });
@@ -83,6 +89,8 @@ const makeProjectionThreadActivityRepository = Effect.gen(function* () {
           summary,
           payload_json AS "payload",
           sequence,
+          parent_tool_use_id AS "parentToolUseId",
+          item_id AS "itemId",
           created_at AS "createdAt"
         FROM projection_thread_activities
         WHERE thread_id = ${threadId}
@@ -131,6 +139,8 @@ const makeProjectionThreadActivityRepository = Effect.gen(function* () {
           summary: row.summary,
           payload: row.payload,
           ...(row.sequence !== null ? { sequence: row.sequence } : {}),
+          parentToolUseId: row.parentToolUseId,
+          itemId: row.itemId,
           createdAt: row.createdAt,
         })),
       ),

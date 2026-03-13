@@ -36,6 +36,18 @@ export interface WorkLogEntry {
   command?: string;
   changedFiles?: ReadonlyArray<string>;
   tone: "thinking" | "tool" | "info" | "error";
+  /** e.g. "command_execution", "file_change", "collab_agent_tool_call" */
+  itemType?: string;
+  status?: "inProgress" | "completed" | "failed" | "declined";
+  /** e.g. "Read", "Bash", "Grep", "Agent", etc. */
+  toolName?: string;
+  /** Links to parent agent's itemId (Anthropic tool_use block ID) */
+  parentTaskId?: string;
+  /** For task.started/completed entries */
+  taskId?: string;
+  /** Runtime item ID (tool_use block ID) — used to identify this tool as a parent for grouping */
+  itemId?: string;
+  elapsedMs?: number;
 }
 
 export interface PendingApproval {
@@ -409,6 +421,39 @@ export function findLatestProposedPlan(
   };
 }
 
+const KNOWN_TOOL_NAMES = [
+  "Read",
+  "Edit",
+  "Write",
+  "MultiEdit",
+  "Bash",
+  "Grep",
+  "Glob",
+  "WebSearch",
+  "WebFetch",
+  "Agent",
+  "Skill",
+  "NotebookEdit",
+];
+
+function extractToolName(
+  activity: OrchestrationThreadActivity,
+  payload: Record<string, unknown> | null,
+): string | undefined {
+  // Try payload.data.toolName first (set by ClaudeCodeAdapter)
+  const data =
+    payload && typeof payload.data === "object" && payload.data
+      ? (payload.data as Record<string, unknown>)
+      : null;
+  if (data && typeof data.toolName === "string") return data.toolName;
+  // Fall back to summary text — tool names often appear as the summary label
+  const summary = activity.summary;
+  for (const tool of KNOWN_TOOL_NAMES) {
+    if (summary.startsWith(tool)) return tool;
+  }
+  return undefined;
+}
+
 export function deriveWorkLogEntries(
   activities: ReadonlyArray<OrchestrationThreadActivity>,
   latestTurnId: TurnId | undefined,
@@ -417,7 +462,6 @@ export function deriveWorkLogEntries(
   return ordered
     .filter((activity) => (latestTurnId ? activity.turnId === latestTurnId : true))
     .filter((activity) => activity.kind !== "tool.started")
-    .filter((activity) => activity.kind !== "task.started" && activity.kind !== "task.completed")
     .filter((activity) => activity.summary !== "Checkpoint captured")
     .map((activity) => {
       const payload =
@@ -426,11 +470,37 @@ export function deriveWorkLogEntries(
           : null;
       const command = extractToolCommand(payload);
       const changedFiles = extractChangedFiles(payload);
+
+      const itemType =
+        payload && typeof payload.itemType === "string" ? payload.itemType : undefined;
+      const status =
+        payload && typeof payload.status === "string"
+          ? (payload.status as WorkLogEntry["status"])
+          : undefined;
+      const toolName = extractToolName(activity, payload);
+      const parentTaskId =
+        activity.parentToolUseId ??
+        (payload && typeof payload.parentTaskId === "string" ? payload.parentTaskId : undefined) ??
+        undefined;
+      const taskId = payload && typeof payload.taskId === "string" ? payload.taskId : undefined;
+
+      // Extract itemId from the activity (Anthropic tool_use block ID for matching parent-child)
+      const itemId =
+        activity.itemId ??
+        (payload && typeof payload.itemId === "string" ? payload.itemId : undefined) ??
+        undefined;
+
       const entry: WorkLogEntry = {
         id: activity.id,
         createdAt: activity.createdAt,
         label: activity.summary,
         tone: activity.tone === "approval" ? "info" : activity.tone,
+        ...(itemType ? { itemType } : {}),
+        ...(status ? { status } : {}),
+        ...(toolName ? { toolName } : {}),
+        ...(parentTaskId ? { parentTaskId } : {}),
+        ...(taskId ? { taskId } : {}),
+        ...(itemId ? { itemId } : {}),
       };
       if (payload && typeof payload.detail === "string" && payload.detail.length > 0) {
         entry.detail = payload.detail;
@@ -582,9 +652,7 @@ export function deriveTimelineEntries(
   const messageRows: TimelineEntry[] = messages.map((message) => ({
     id: message.id,
     kind: "message",
-    createdAt: message.role === "assistant"
-      ? (message.completedAt ?? "\uFFFF")
-      : message.createdAt,
+    createdAt: message.role === "assistant" ? (message.completedAt ?? "\uFFFF") : message.createdAt,
     message,
   }));
   const proposedPlanRows: TimelineEntry[] = proposedPlans.map((proposedPlan) => ({

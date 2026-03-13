@@ -246,6 +246,9 @@ export const OrchestrationThreadActivity = Schema.Struct({
   payload: Schema.Unknown,
   turnId: Schema.NullOr(TurnId),
   sequence: Schema.optional(NonNegativeInt),
+  parentToolUseId: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  /** Runtime item ID (e.g. Anthropic tool_use block ID) — used to match parentToolUseId on children */
+  itemId: Schema.optional(TrimmedNonEmptyString),
   createdAt: IsoDateTime,
 });
 export type OrchestrationThreadActivity = typeof OrchestrationThreadActivity.Type;

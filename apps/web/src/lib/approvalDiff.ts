@@ -177,11 +177,7 @@ function fromRawPayload(
 /**
  * Generate a unified diff for an edit operation (string replacement).
  */
-function generateEditDiff(
-  filePath: string,
-  oldString: string,
-  newString: string,
-): string {
+function generateEditDiff(filePath: string, oldString: string, newString: string): string {
   const oldLines = oldString.split("\n");
   const newLines = newString.split("\n");
   const removals = oldLines.map((line) => `-${line}`).join("\n");

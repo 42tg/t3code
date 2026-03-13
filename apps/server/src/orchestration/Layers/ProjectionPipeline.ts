@@ -710,6 +710,8 @@ const makeOrchestrationProjectionPipeline = Effect.gen(function* () {
             ...(event.payload.activity.sequence !== undefined
               ? { sequence: event.payload.activity.sequence }
               : {}),
+            parentToolUseId: event.payload.activity.parentToolUseId ?? null,
+            itemId: event.payload.activity.itemId ?? null,
             createdAt: event.payload.activity.createdAt,
           });
           return;

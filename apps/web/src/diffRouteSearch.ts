@@ -22,7 +22,13 @@ function normalizeSearchString(value: unknown): string | undefined {
 export function stripDiffSearchParams<T extends Record<string, unknown>>(
   params: T,
 ): Omit<T, "diff" | "diffTurnId" | "diffFilePath" | "diffBranch"> {
-  const { diff: _diff, diffTurnId: _diffTurnId, diffFilePath: _diffFilePath, diffBranch: _diffBranch, ...rest } = params;
+  const {
+    diff: _diff,
+    diffTurnId: _diffTurnId,
+    diffFilePath: _diffFilePath,
+    diffBranch: _diffBranch,
+    ...rest
+  } = params;
   return rest as Omit<T, "diff" | "diffTurnId" | "diffFilePath" | "diffBranch">;
 }
 

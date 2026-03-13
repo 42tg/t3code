@@ -246,7 +246,8 @@ export default function ReviewPrDialog({ projectId, projectCwd, onClose }: Revie
                             toastManager.add({
                               type: "error",
                               title: "Failed to fetch PR details",
-                              description: error instanceof Error ? error.message : "An error occurred.",
+                              description:
+                                error instanceof Error ? error.message : "An error occurred.",
                             });
                           },
                         },

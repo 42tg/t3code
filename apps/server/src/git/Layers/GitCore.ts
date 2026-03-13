@@ -1410,10 +1410,9 @@ const makeGitCore = Effect.gen(function* () {
     );
 
   const diffBranch: GitCoreShape["diffBranch"] = (input) =>
-    runGitStdout("GitCore.diffBranch", input.cwd, [
-      "diff",
-      `${input.base}...HEAD`,
-    ], true).pipe(Effect.map((stdout) => ({ diff: stdout })));
+    runGitStdout("GitCore.diffBranch", input.cwd, ["diff", `${input.base}...HEAD`], true).pipe(
+      Effect.map((stdout) => ({ diff: stdout })),
+    );
 
   return {
     status,

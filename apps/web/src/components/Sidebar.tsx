@@ -196,7 +196,8 @@ function T3Wordmark() {
 function getServerHttpOrigin(): string {
   const bridgeUrl = window.desktopBridge?.getWsUrl();
   const envUrl = import.meta.env.VITE_WS_URL as string | undefined;
-  const isRemote = window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1";
+  const isRemote =
+    window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1";
   const locationWsUrl = `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.hostname}:${window.location.port}`;
   const wsUrl =
     bridgeUrl && bridgeUrl.length > 0
@@ -824,7 +825,10 @@ export default function Sidebar() {
         if (!thread.worktreePath || !threadProject) return;
         const displayPath = formatWorktreePathForDisplay(thread.worktreePath);
         const confirmed = await api.dialogs.confirm(
-          [`Delete worktree "${displayPath}"?`, "This removes the worktree directory from disk."].join("\n"),
+          [
+            `Delete worktree "${displayPath}"?`,
+            "This removes the worktree directory from disk.",
+          ].join("\n"),
         );
         if (!confirmed) return;
         try {
@@ -861,7 +865,14 @@ export default function Sidebar() {
       }
       await deleteThread(threadId);
     },
-    [appSettings.confirmThreadDelete, deleteThread, markThreadUnread, projects, removeWorktreeMutation, threads],
+    [
+      appSettings.confirmThreadDelete,
+      deleteThread,
+      markThreadUnread,
+      projects,
+      removeWorktreeMutation,
+      threads,
+    ],
   );
 
   const handleMultiSelectContextMenu = useCallback(

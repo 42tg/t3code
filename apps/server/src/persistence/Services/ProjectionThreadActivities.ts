@@ -28,6 +28,8 @@ export const ProjectionThreadActivity = Schema.Struct({
   summary: Schema.String,
   payload: Schema.Unknown,
   sequence: Schema.optional(NonNegativeInt),
+  parentToolUseId: Schema.NullOr(Schema.String),
+  itemId: Schema.NullOr(Schema.String),
   createdAt: IsoDateTime,
 });
 export type ProjectionThreadActivity = typeof ProjectionThreadActivity.Type;

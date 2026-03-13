@@ -4,11 +4,7 @@ import { ChevronDownIcon, FileIcon, TerminalIcon } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 import { useTheme } from "../hooks/useTheme";
 import { toolArgsToDiff } from "../lib/approvalDiff";
-import {
-  buildPatchCacheKey,
-  DIFF_UNSAFE_CSS,
-  resolveDiffThemeName,
-} from "../lib/diffRendering";
+import { buildPatchCacheKey, DIFF_UNSAFE_CSS, resolveDiffThemeName } from "../lib/diffRendering";
 import { cn } from "../lib/utils";
 
 type DiffThemeType = "light" | "dark";
@@ -48,10 +44,7 @@ export const ApprovalDiffView = memo(function ApprovalDiffView({
           onClick={() => setCollapsed((prev) => !prev)}
         >
           <ChevronDownIcon
-            className={cn(
-              "size-3 transition-transform",
-              collapsed && "-rotate-90",
-            )}
+            className={cn("size-3 transition-transform", collapsed && "-rotate-90")}
           />
           <TerminalIcon className="size-3" />
           <span className="font-medium">Command</span>
@@ -98,14 +91,14 @@ interface ApprovalFileDiffProps {
   onToggleCollapsed: () => void;
 }
 
-function parseApprovalPatch(
-  patch: string,
-  cacheScope: string,
-): FileDiffMetadata[] | null {
+function parseApprovalPatch(patch: string, cacheScope: string): FileDiffMetadata[] | null {
   try {
     const normalizedPatch = patch.trim();
     if (normalizedPatch.length === 0) return null;
-    const parsed = parsePatchFiles(normalizedPatch, buildPatchCacheKey(normalizedPatch, cacheScope));
+    const parsed = parsePatchFiles(
+      normalizedPatch,
+      buildPatchCacheKey(normalizedPatch, cacheScope),
+    );
     const files = parsed.flatMap((p) => p.files);
     return files.length > 0 ? files : null;
   } catch {
@@ -130,12 +123,7 @@ const ApprovalFileDiff = memo(function ApprovalFileDiff({
         className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground/80 hover:text-foreground/80"
         onClick={onToggleCollapsed}
       >
-        <ChevronDownIcon
-          className={cn(
-            "size-3 transition-transform",
-            collapsed && "-rotate-90",
-          )}
-        />
+        <ChevronDownIcon className={cn("size-3 transition-transform", collapsed && "-rotate-90")} />
         <FileIcon className="size-3" />
         <span className="font-mono font-medium truncate">{filePath}</span>
       </button>

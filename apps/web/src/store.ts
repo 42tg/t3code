@@ -243,7 +243,8 @@ function resolveWsHttpOrigin(): string {
   if (typeof window === "undefined") return "";
   const bridgeWsUrl = window.desktopBridge?.getWsUrl?.();
   const envWsUrl = import.meta.env.VITE_WS_URL as string | undefined;
-  const isRemote = window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1";
+  const isRemote =
+    window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1";
   const wsCandidate =
     typeof bridgeWsUrl === "string" && bridgeWsUrl.length > 0
       ? bridgeWsUrl

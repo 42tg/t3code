@@ -253,6 +253,15 @@ function runtimeEventToActivities(
       ? { sequence: eventWithSequence.sessionSequence }
       : {};
   })();
+  const maybeParentToolUseId = (() => {
+    const eventWithParent = event as ProviderRuntimeEvent & { parentToolUseId?: string | null };
+    return eventWithParent.parentToolUseId
+      ? { parentToolUseId: eventWithParent.parentToolUseId }
+      : {};
+  })();
+  const maybeItemId = (() => {
+    return event.itemId ? { itemId: event.itemId } : {};
+  })();
   switch (event.type) {
     case "request.opened": {
       if (event.payload.requestType === "tool_user_input") {
@@ -282,6 +291,7 @@ function runtimeEventToActivities(
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
+          ...maybeParentToolUseId,
         },
       ];
     }
@@ -306,6 +316,7 @@ function runtimeEventToActivities(
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
+          ...maybeParentToolUseId,
         },
       ];
     }
@@ -327,6 +338,7 @@ function runtimeEventToActivities(
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
+          ...maybeParentToolUseId,
         },
       ];
     }
@@ -345,6 +357,7 @@ function runtimeEventToActivities(
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
+          ...maybeParentToolUseId,
         },
       ];
     }
@@ -365,6 +378,7 @@ function runtimeEventToActivities(
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
+          ...maybeParentToolUseId,
         },
       ];
     }
@@ -383,6 +397,7 @@ function runtimeEventToActivities(
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
+          ...maybeParentToolUseId,
         },
       ];
     }
@@ -401,6 +416,7 @@ function runtimeEventToActivities(
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
+          ...maybeParentToolUseId,
         },
       ];
     }
@@ -427,6 +443,7 @@ function runtimeEventToActivities(
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
+          ...maybeParentToolUseId,
         },
       ];
     }
@@ -447,6 +464,7 @@ function runtimeEventToActivities(
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
+          ...maybeParentToolUseId,
         },
       ];
     }
@@ -472,6 +490,7 @@ function runtimeEventToActivities(
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
+          ...maybeParentToolUseId,
         },
       ];
     }
@@ -495,6 +514,7 @@ function runtimeEventToActivities(
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
+          ...maybeParentToolUseId,
         },
       ];
     }
@@ -513,9 +533,12 @@ function runtimeEventToActivities(
           payload: {
             itemType: event.payload.itemType,
             ...(event.payload.detail ? { detail: truncateDetail(event.payload.detail) } : {}),
+            ...(event.payload.data !== undefined ? { data: event.payload.data } : {}),
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
+          ...maybeParentToolUseId,
+          ...maybeItemId,
         },
       ];
     }
@@ -537,6 +560,8 @@ function runtimeEventToActivities(
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
+          ...maybeParentToolUseId,
+          ...maybeItemId,
         },
       ];
     }

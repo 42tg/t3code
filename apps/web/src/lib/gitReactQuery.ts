@@ -11,7 +11,8 @@ export const gitQueryKeys = {
   all: ["git"] as const,
   status: (cwd: string | null) => ["git", "status", cwd] as const,
   branches: (cwd: string | null) => ["git", "branches", cwd] as const,
-  diffBranch: (cwd: string | null, base: string | null) => ["git", "diffBranch", cwd, base] as const,
+  diffBranch: (cwd: string | null, base: string | null) =>
+    ["git", "diffBranch", cwd, base] as const,
 };
 
 export const gitMutationKeys = {

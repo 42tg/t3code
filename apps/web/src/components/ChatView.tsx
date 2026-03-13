@@ -77,8 +77,10 @@ import {
   deriveWorkLogEntries,
   hasToolActivityForTurn,
   isLatestTurnSettled,
+  formatDuration,
   formatElapsed,
   formatTimestamp,
+  type WorkLogEntry,
 } from "../session-logic";
 import { AUTO_SCROLL_BOTTOM_THRESHOLD_PX, isScrollContainerNearBottom } from "../chat-scroll";
 import {
@@ -132,26 +134,38 @@ import PlanSidebar from "./PlanSidebar";
 import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "./ui/alert";
 import {
+  BanIcon,
   BotIcon,
+  BookOpenIcon,
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   CircleAlertIcon,
+  CircleIcon,
   FileIcon,
+  FilePenIcon,
+  FileTextIcon,
   FolderIcon,
+  FolderSearchIcon,
   DiffIcon,
   EllipsisIcon,
   FolderClosedIcon,
   FolderXIcon,
+  GlobeIcon,
   ListTodoIcon,
+  Loader2Icon,
   LoaderIcon,
   LockIcon,
   LockOpenIcon,
+  PlugIcon,
+  SearchIcon,
   TerminalIcon,
   Undo2Icon,
+  WrenchIcon,
   XIcon,
   CopyIcon,
   CheckIcon,
+  ZapIcon,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -289,11 +303,276 @@ function readLastInvokedScriptByProjectFromStorage(): Record<string, string> {
   }
 }
 
-function workToneClass(tone: "thinking" | "tool" | "info" | "error"): string {
-  if (tone === "error") return "text-rose-300/50 dark:text-rose-300/50";
-  if (tone === "tool") return "text-muted-foreground/70";
-  if (tone === "thinking") return "text-muted-foreground/50";
-  return "text-muted-foreground/40";
+// ---------------------------------------------------------------------------
+// Tool call / agent execution rendering helpers
+// ---------------------------------------------------------------------------
+
+function toolIcon(toolName?: string, itemType?: string) {
+  switch (toolName) {
+    case "Bash":
+      return TerminalIcon;
+    case "Edit":
+    case "Write":
+    case "MultiEdit":
+      return FilePenIcon;
+    case "Read":
+      return FileTextIcon;
+    case "WebSearch":
+    case "WebFetch":
+      return GlobeIcon;
+    case "Grep":
+      return SearchIcon;
+    case "Glob":
+      return FolderSearchIcon;
+    case "Agent":
+      return BotIcon;
+    case "NotebookEdit":
+      return BookOpenIcon;
+    case "Skill":
+      return ZapIcon;
+    default:
+      break;
+  }
+  switch (itemType) {
+    case "command_execution":
+      return TerminalIcon;
+    case "file_change":
+      return FilePenIcon;
+    case "mcp_tool_call":
+      return PlugIcon;
+    case "dynamic_tool_call":
+      return WrenchIcon;
+    default:
+      return CircleIcon;
+  }
+}
+
+function StatusIndicator({
+  status,
+  isLive,
+}: {
+  status?: WorkLogEntry["status"];
+  isLive?: boolean;
+}) {
+  if (isLive || status === "inProgress") {
+    return <Loader2Icon className="h-3 w-3 shrink-0 animate-spin text-blue-400" />;
+  }
+  if (status === "failed") {
+    return <XIcon className="h-3 w-3 shrink-0 text-rose-400" />;
+  }
+  if (status === "declined") {
+    return <BanIcon className="h-3 w-3 shrink-0 text-amber-400" />;
+  }
+  return <CheckIcon className="h-3 w-3 shrink-0 text-muted-foreground/30" />;
+}
+
+function ToolCallRow({ entry, isLive }: { entry: WorkLogEntry; isLive: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const Icon = toolIcon(entry.toolName, entry.itemType);
+  const hasDetail = entry.detail && (!entry.command || entry.detail !== entry.command);
+  const isReasoningUpdate = entry.label === "Reasoning update" && hasDetail;
+
+  if (isReasoningUpdate) {
+    return (
+      <p className="py-0.5 pl-7 text-[11px] italic leading-relaxed text-muted-foreground/50">
+        {entry.detail}
+      </p>
+    );
+  }
+
+  const displayLabel = entry.label.replace(/ (complete|started|running)$/i, "");
+  const filePath = entry.changedFiles?.[0];
+  const elapsed = entry.elapsedMs != null ? formatDuration(entry.elapsedMs) : undefined;
+
+  return (
+    <div
+      className={cn(
+        "rounded-md transition-colors duration-100",
+        entry.status === "failed" && "border-l-2 border-l-rose-400/60 bg-rose-500/[0.03]",
+      )}
+    >
+      <button
+        type="button"
+        className="flex w-full items-start gap-1.5 rounded-md px-2 py-1 text-left transition-colors duration-100 hover:bg-muted/30"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <ChevronRightIcon
+          className={cn(
+            "mt-[3px] h-3 w-3 shrink-0 text-muted-foreground/40 transition-transform duration-150",
+            expanded && "rotate-90",
+          )}
+        />
+        <StatusIndicator status={entry.status} isLive={isLive} />
+        <Icon
+          className={cn(
+            "mt-[2px] h-3.5 w-3.5 shrink-0",
+            isLive
+              ? "text-blue-400"
+              : entry.status === "failed"
+                ? "text-rose-400"
+                : "text-muted-foreground/50",
+          )}
+        />
+        <div className="min-w-0 flex-1">
+          <span
+            className={cn(
+              "text-[12px] font-medium leading-snug",
+              isLive ? "text-foreground/80" : "text-foreground/65",
+            )}
+          >
+            {displayLabel}
+          </span>
+          {(filePath || entry.command) && (
+            <span className="ml-2 truncate font-mono text-[11px] text-muted-foreground/45">
+              {filePath || entry.command}
+            </span>
+          )}
+        </div>
+        {elapsed && (
+          <span className="ml-auto shrink-0 tabular-nums text-[10px] text-muted-foreground/40">
+            {elapsed}
+          </span>
+        )}
+      </button>
+
+      {expanded && (
+        <div className="mb-1 ml-7 mt-1 overflow-hidden rounded-md border border-border/60 bg-background/60 text-[11px]">
+          {entry.command && (
+            <>
+              <div className="border-b border-border/40 bg-muted/20 px-2.5 py-1 text-[10px] uppercase tracking-wider text-muted-foreground/50">
+                Command
+              </div>
+              <pre className="whitespace-pre-wrap px-2.5 py-2 font-mono text-[11px] leading-relaxed text-foreground/70">
+                {entry.command}
+              </pre>
+            </>
+          )}
+          {entry.detail && entry.detail !== entry.command && (
+            <>
+              <div className="border-b border-border/40 bg-muted/20 px-2.5 py-1 text-[10px] uppercase tracking-wider text-muted-foreground/50">
+                Detail
+              </div>
+              <pre className="max-h-[300px] overflow-y-auto overflow-x-auto whitespace-pre-wrap px-2.5 py-2 font-mono text-[11px] leading-relaxed text-foreground/70">
+                {entry.detail}
+              </pre>
+            </>
+          )}
+          {entry.changedFiles && entry.changedFiles.length > 0 && (
+            <div className="flex flex-wrap gap-1 border-t border-border/40 px-2.5 py-1.5">
+              {entry.changedFiles.map((fp) => (
+                <span
+                  key={fp}
+                  className="inline-flex rounded-md border border-border/50 bg-background/50 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground/70"
+                  title={fp}
+                >
+                  {fp.split("/").pop()}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AgentExecutionContainer({
+  agentEntry,
+  childEntries,
+  isLive,
+}: {
+  agentEntry: WorkLogEntry;
+  childEntries: WorkLogEntry[];
+  isLive: boolean;
+}) {
+  const [expanded, setExpanded] = useState(isLive);
+
+  useEffect(() => {
+    if (isLive) setExpanded(true);
+  }, [isLive]);
+
+  const description = (() => {
+    // Extract "description" from Agent tool JSON input (may be truncated, so use regex)
+    const raw = agentEntry.detail ?? "";
+    const match = raw.match(/"description"\s*:\s*"([^"]+)"/);
+    if (match?.[1]) return match[1];
+    return agentEntry.label === "Agent complete" ? "Agent" : agentEntry.label;
+  })();
+  const totalCount = childEntries.length;
+  const isFailed = agentEntry.tone === "error" || agentEntry.label.toLowerCase().includes("failed");
+
+  const accentClass = isFailed
+    ? "border-l-rose-400/60"
+    : isLive
+      ? "border-l-blue-400/60"
+      : "border-l-muted-foreground/20";
+
+  return (
+    <div
+      className={cn(
+        "overflow-hidden rounded-lg border border-border/60 border-l-2 bg-card/30",
+        accentClass,
+      )}
+    >
+      <button
+        type="button"
+        className="flex w-full items-start gap-2 px-3 py-2 text-left transition-colors duration-100 hover:bg-muted/20"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <ChevronRightIcon
+          className={cn(
+            "mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/40 transition-transform duration-150",
+            expanded && "rotate-90",
+          )}
+        />
+        <BotIcon
+          className={cn(
+            "mt-0.5 h-4 w-4 shrink-0",
+            isLive ? "text-blue-400" : isFailed ? "text-rose-400" : "text-muted-foreground/50",
+          )}
+        />
+        <div className="min-w-0 flex-1">
+          <p className="text-[12px] font-medium leading-snug text-foreground/80">
+            {description}
+          </p>
+          <p className="mt-0.5 text-[10px] text-muted-foreground/50">
+            {isLive ? (
+              <>
+                {totalCount} tool call{totalCount !== 1 ? "s" : ""} so far
+              </>
+            ) : isFailed ? (
+              "Failed"
+            ) : (
+              <>
+                {totalCount} tool call{totalCount !== 1 ? "s" : ""} completed
+              </>
+            )}
+          </p>
+        </div>
+        {isLive ? (
+          <Loader2Icon className="ml-auto h-3.5 w-3.5 shrink-0 animate-spin text-blue-400" />
+        ) : agentEntry.elapsedMs != null ? (
+          <span className="ml-auto shrink-0 tabular-nums text-[10px] text-muted-foreground/40">
+            {formatDuration(agentEntry.elapsedMs)}
+          </span>
+        ) : null}
+      </button>
+
+      {expanded && childEntries.length > 0 && (
+        <div className="ml-3 space-y-0.5 border-l-2 border-l-border/40 py-1 pl-3">
+          {childEntries.map((child, idx) => (
+            <ToolCallRow
+              key={child.id}
+              entry={child}
+              isLive={isLive && idx === childEntries.length - 1}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Agent detail is raw JSON input — already shown as parsed description in header */}
+    </div>
+  );
 }
 
 interface ExpandedImageItem {
@@ -1408,8 +1687,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     refetchOnWindowFocus: "always",
   });
   const isWorktreeMissing =
-    !!activeThreadWorktreePath &&
-    (worktreeProbeQuery.isError || branchesQuery.isError);
+    !!activeThreadWorktreePath && (worktreeProbeQuery.isError || branchesQuery.isError);
   const handleRecreateWorktreeFromChat = useCallback(() => {
     if (!activeProject || !activeThread?.branch || !activeThreadWorktreePath) return;
     createWorktreeMutation.mutate(
@@ -1426,7 +1704,14 @@ export default function ChatView({ threadId }: ChatViewProps) {
         },
       },
     );
-  }, [activeProject, activeThread?.branch, activeThreadWorktreePath, branchesQuery, createWorktreeMutation, worktreeProbeQuery]);
+  }, [
+    activeProject,
+    activeThread?.branch,
+    activeThreadWorktreePath,
+    branchesQuery,
+    createWorktreeMutation,
+    worktreeProbeQuery,
+  ]);
   const splitTerminalShortcutLabel = useMemo(
     () => shortcutLabelForCommand(keybindings, "terminal.split"),
     [keybindings],
@@ -2602,7 +2887,15 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const onSend = async (e?: { preventDefault: () => void }) => {
     e?.preventDefault();
     const api = readNativeApi();
-    if (!api || !activeThread || isSendBusy || isConnecting || sendInFlightRef.current || isWorktreeMissing) return;
+    if (
+      !api ||
+      !activeThread ||
+      isSendBusy ||
+      isConnecting ||
+      sendInFlightRef.current ||
+      isWorktreeMissing
+    )
+      return;
     if (activePendingProgress) {
       onAdvanceActivePendingUserInput();
       return;
@@ -3648,7 +3941,12 @@ export default function ChatView({ threadId }: ChatViewProps) {
       <ProviderHealthBanner status={activeProviderStatus} />
       {activeThread.session?.status !== "closed" && (
         <ThreadErrorBanner
-          error={activeThread.error ?? (activeThread.session?.status === "error" ? activeThread.session.lastError ?? null : null)}
+          error={
+            activeThread.error ??
+            (activeThread.session?.status === "error"
+              ? (activeThread.session.lastError ?? null)
+              : null)
+          }
           onDismiss={() => setThreadError(activeThread.id, null)}
         />
       )}
@@ -4052,7 +4350,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
                       ) : null}
                       {activePendingProgress ? (
                         <div className="flex items-center gap-2">
-                          {activePendingProgress.questionIndex > 0 || activePendingProgress.isReviewStep ? (
+                          {activePendingProgress.questionIndex > 0 ||
+                          activePendingProgress.isReviewStep ? (
                             <Button
                               size="sm"
                               variant="outline"
@@ -5219,6 +5518,13 @@ type TimelineRow =
       groupedEntries: TimelineWorkEntry[];
     }
   | {
+      kind: "agent-execution";
+      id: string;
+      createdAt: string;
+      agentEntry: WorkLogEntry;
+      childEntries: WorkLogEntry[];
+    }
+  | {
       kind: "message";
       id: string;
       createdAt: string;
@@ -5291,6 +5597,68 @@ const MessagesTimeline = memo(function MessagesTimeline({
   const rows = useMemo<TimelineRow[]>(() => {
     const nextRows: TimelineRow[] = [];
 
+    // Pre-scan: group work entries by parentTaskId to identify agent children.
+    // parentTaskId comes from parentToolUseId (the Anthropic tool_use block ID).
+    // Agent tool entries carry itemId (the same tool_use block ID) so we can match them.
+    const agentChildrenByParent = new Map<string, WorkLogEntry[]>();
+    const consumedEntryIds = new Set<string>();
+    // Map itemId → Agent tool entries (tool.started/tool.completed)
+    const agentEntriesByItemId = new Map<
+      string,
+      { started?: WorkLogEntry; completed?: WorkLogEntry }
+    >();
+
+    for (const te of timelineEntries) {
+      if (te.kind !== "work") continue;
+      const entry = te.entry;
+
+      // Index Agent tool entries by their itemId for later parent matching
+      if (entry.itemId && entry.toolName === "Agent") {
+        const existing = agentEntriesByItemId.get(entry.itemId) ?? {};
+        if (entry.label.toLowerCase().includes("started")) {
+          existing.started = entry;
+        } else {
+          existing.completed = entry;
+        }
+        agentEntriesByItemId.set(entry.itemId, existing);
+      }
+
+      if (entry.parentTaskId) {
+        // This is a child of an agent execution
+        let children = agentChildrenByParent.get(entry.parentTaskId);
+        if (!children) {
+          children = [];
+          agentChildrenByParent.set(entry.parentTaskId, children);
+        }
+        children.push(entry);
+        consumedEntryIds.add(te.id);
+        continue;
+      }
+
+      // task.started/task.completed without parentTaskId are agent lifecycle
+      // events — consume them so they don't appear as separate rows.
+      if (
+        entry.taskId &&
+        (entry.label.toLowerCase().includes("task started") ||
+          entry.label.toLowerCase().includes("task completed") ||
+          entry.label.toLowerCase().includes("task failed"))
+      ) {
+        consumedEntryIds.add(te.id);
+        continue;
+      }
+    }
+
+    // Consume Agent tool entries whose itemId matches a known parent group
+    for (const [itemId, agents] of agentEntriesByItemId) {
+      if (agentChildrenByParent.has(itemId)) {
+        if (agents.started) consumedEntryIds.add(agents.started.id);
+        if (agents.completed) consumedEntryIds.add(agents.completed.id);
+      }
+    }
+
+    // Track which agent groups have been emitted
+    const emittedAgentGroups = new Set<string>();
+
     for (let index = 0; index < timelineEntries.length; index += 1) {
       const timelineEntry = timelineEntries[index];
       if (!timelineEntry) {
@@ -5298,12 +5666,44 @@ const MessagesTimeline = memo(function MessagesTimeline({
       }
 
       if (timelineEntry.kind === "work") {
-        const groupedEntries = [timelineEntry.entry];
+        const entry = timelineEntry.entry;
+
+        // Skip entries consumed by agent grouping
+        if (consumedEntryIds.has(timelineEntry.id)) {
+          // If this is an Agent tool entry with children, emit the agent group here
+          const agentItemId = entry.itemId ?? entry.parentTaskId;
+          if (agentItemId && !emittedAgentGroups.has(agentItemId)) {
+            const children = agentChildrenByParent.get(agentItemId);
+            if (children && children.length > 0) {
+              emittedAgentGroups.add(agentItemId);
+              const agents = agentEntriesByItemId.get(agentItemId);
+              const agentEntry: WorkLogEntry = agents?.completed ?? agents?.started ?? {
+                id: `agent-group:${agentItemId}`,
+                createdAt: children[0]?.createdAt ?? entry.createdAt,
+                label: "Agent",
+                tone: "tool",
+                toolName: "Agent",
+              };
+              nextRows.push({
+                kind: "agent-execution",
+                id: `agent-group:${agentItemId}`,
+                createdAt: agents?.started?.createdAt ?? children[0]?.createdAt ?? entry.createdAt,
+                agentEntry,
+                childEntries: children,
+              });
+            }
+          }
+          continue;
+        }
+
+        // Regular tool call grouping (non-agent entries)
+        const groupedEntries = [entry];
         let cursor = index + 1;
         while (cursor < timelineEntries.length) {
-          const nextEntry = timelineEntries[cursor];
-          if (!nextEntry || nextEntry.kind !== "work") break;
-          groupedEntries.push(nextEntry.entry);
+          const nextTimelineEntry = timelineEntries[cursor];
+          if (!nextTimelineEntry || nextTimelineEntry.kind !== "work") break;
+          if (consumedEntryIds.has(nextTimelineEntry.id)) break;
+          groupedEntries.push(nextTimelineEntry.entry);
           cursor += 1;
         }
         nextRows.push({
@@ -5400,6 +5800,7 @@ const MessagesTimeline = memo(function MessagesTimeline({
       const row = rows[index];
       if (!row) return 96;
       if (row.kind === "work") return 112;
+      if (row.kind === "agent-execution") return 56 + 28 * row.childEntries.length + 40;
       if (row.kind === "proposed-plan") return estimateTimelineProposedPlanHeight(row.proposedPlan);
       if (row.kind === "working") return 40;
       return estimateTimelineMessageHeight(row.message, { timelineWidthPx });
@@ -5480,91 +5881,41 @@ const MessagesTimeline = memo(function MessagesTimeline({
               : `Work log (${groupedEntries.length})`;
 
           return (
-            <div className="rounded-lg border border-border/80 bg-card/45 px-3 py-2">
-              <div className="mb-1.5 flex items-center justify-between gap-3">
-                <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/65">
+            <div className="rounded-lg border border-border/60 bg-card/30 px-3 py-2">
+              <div className="mb-1 flex items-center justify-between gap-3">
+                <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/50">
                   {groupLabel}
                 </p>
                 {hasOverflow && (
                   <button
                     type="button"
-                    className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/55 transition-colors duration-150 hover:text-muted-foreground/80"
+                    className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/40 transition-colors duration-150 hover:text-muted-foreground/70"
                     onClick={() => onToggleWorkGroup(groupId)}
                   >
                     {isExpanded ? "Show less" : `Show ${hiddenCount} more`}
                   </button>
                 )}
               </div>
-              <div className="space-y-1">
-                {visibleEntries.map((workEntry, idx) => {
-                  const isLastEntry = idx === visibleEntries.length - 1;
-                  const isLive = isLastEntry && isWorking;
-                  const hasDetail = workEntry.detail && (!workEntry.command || workEntry.detail !== workEntry.command);
-                  const isReasoningUpdate = workEntry.label === "Reasoning update" && hasDetail;
-                  return (
-                    <div key={`work-row:${workEntry.id}`} className="flex items-start gap-2 py-0.5">
-                      <span
-                        className={cn(
-                          "mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full",
-                          isLive
-                            ? "animate-pulse bg-blue-400/80"
-                            : "bg-muted-foreground/30",
-                        )}
-                      />
-                      <div className="min-w-0 flex-1 py-[2px]">
-                        {isReasoningUpdate ? (
-                          <p className={cn(
-                            "text-[11px] leading-relaxed",
-                            isLive ? "text-foreground/80" : "text-muted-foreground/75",
-                          )}>
-                            {workEntry.detail}
-                          </p>
-                        ) : (
-                          <>
-                            <p className={`text-[11px] leading-relaxed ${workToneClass(workEntry.tone)}`}>
-                              {workEntry.label}
-                            </p>
-                            {hasDetail && (
-                              <p
-                                className="mt-1 text-[11px] leading-relaxed text-muted-foreground/75"
-                                title={workEntry.detail}
-                              >
-                                {workEntry.detail}
-                              </p>
-                            )}
-                          </>
-                        )}
-                        {workEntry.command && (
-                          <pre className="mt-1 overflow-x-auto rounded-md border border-border/70 bg-background/80 px-2 py-1 font-mono text-[11px] leading-relaxed text-foreground/80">
-                            {workEntry.command}
-                          </pre>
-                        )}
-                        {workEntry.changedFiles && workEntry.changedFiles.length > 0 && (
-                          <div className="mt-1 flex flex-wrap gap-1">
-                            {workEntry.changedFiles.slice(0, 6).map((filePath) => (
-                              <span
-                                key={`${workEntry.id}:${filePath}`}
-                                className="rounded-md border border-border/70 bg-background/65 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground/85"
-                                title={filePath}
-                              >
-                                {filePath}
-                              </span>
-                            ))}
-                            {workEntry.changedFiles.length > 6 && (
-                              <span className="px-1 text-[10px] text-muted-foreground/65">
-                                +{workEntry.changedFiles.length - 6} more
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="space-y-0.5">
+                {visibleEntries.map((workEntry, idx) => (
+                  <ToolCallRow
+                    key={workEntry.id}
+                    entry={workEntry}
+                    isLive={idx === visibleEntries.length - 1 && isWorking}
+                  />
+                ))}
               </div>
             </div>
           );
         })()}
+
+      {row.kind === "agent-execution" && (
+        <AgentExecutionContainer
+          agentEntry={row.agentEntry}
+          childEntries={row.childEntries}
+          isLive={isWorking && !row.agentEntry.label.toLowerCase().includes("completed")}
+        />
+      )}
 
       {row.kind === "message" &&
         row.message.role === "user" &&

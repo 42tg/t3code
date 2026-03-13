@@ -367,7 +367,12 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
           operation: "ProviderService.respondToRequest",
           allowRecovery: true,
         });
-        yield* routed.adapter.respondToRequest(routed.threadId, input.requestId, input.decision, input.feedback);
+        yield* routed.adapter.respondToRequest(
+          routed.threadId,
+          input.requestId,
+          input.decision,
+          input.feedback,
+        );
       });
 
     const respondToUserInput: ProviderServiceShape["respondToUserInput"] = (rawInput) =>

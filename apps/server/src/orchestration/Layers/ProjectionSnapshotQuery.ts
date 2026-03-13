@@ -221,6 +221,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           summary,
           payload_json AS "payload",
           sequence,
+          parent_tool_use_id AS "parentToolUseId",
+          item_id AS "itemId",
           created_at AS "createdAt"
         FROM projection_thread_activities
         ORDER BY
@@ -452,6 +454,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
               payload: row.payload,
               turnId: row.turnId,
               ...(row.sequence !== null ? { sequence: row.sequence } : {}),
+              ...(row.parentToolUseId ? { parentToolUseId: row.parentToolUseId } : {}),
+              ...(row.itemId ? { itemId: row.itemId } : {}),
               createdAt: row.createdAt,
             });
             activitiesByThread.set(row.threadId, threadActivities);

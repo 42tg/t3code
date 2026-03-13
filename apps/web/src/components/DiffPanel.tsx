@@ -42,7 +42,6 @@ import { ToggleGroup, Toggle } from "./ui/toggle-group";
 type DiffRenderMode = "stacked" | "split";
 type DiffThemeType = "light" | "dark";
 
-
 type RenderablePatch =
   | {
       kind: "files";
@@ -160,7 +159,10 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
     }),
   );
   const branchDiffPatch = useMemo(
-    () => (showBranchDiff ? getRenderablePatch(branchDiffQuery.data?.diff, `branch-diff:${resolvedTheme}`) : null),
+    () =>
+      showBranchDiff
+        ? getRenderablePatch(branchDiffQuery.data?.diff, `branch-diff:${resolvedTheme}`)
+        : null,
     [showBranchDiff, branchDiffQuery.data?.diff, resolvedTheme],
   );
   const branchDiffFiles = useMemo(() => {
@@ -288,7 +290,13 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
         },
       },
     );
-  }, [activeProject, activeThread?.branch, createWorktreeMutation, worktreePath, activeCheckpointDiffQuery]);
+  }, [
+    activeProject,
+    activeThread?.branch,
+    createWorktreeMutation,
+    worktreePath,
+    activeCheckpointDiffQuery,
+  ]);
 
   const selectedPatch = selectedTurn ? selectedTurnCheckpointDiff : conversationCheckpointDiff;
   const hasResolvedPatch = typeof selectedPatch === "string";
@@ -515,9 +523,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
       {defaultBranchName && (
         <button
           type="button"
-          className={cn(
-            "shrink-0 rounded-md [-webkit-app-region:no-drag]",
-          )}
+          className={cn("shrink-0 rounded-md [-webkit-app-region:no-drag]")}
           onClick={() => {
             if (!activeThread) return;
             void navigate({
@@ -525,7 +531,11 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
               params: { threadId: activeThread.id },
               search: (previous) => {
                 const rest = stripDiffSearchParams(previous);
-                return { ...rest, diff: "1" as const, ...(!showBranchDiff ? { diffBranch: "1" as const } : {}) };
+                return {
+                  ...rest,
+                  diff: "1" as const,
+                  ...(!showBranchDiff ? { diffBranch: "1" as const } : {}),
+                };
               },
             });
           }}
@@ -540,7 +550,9 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
             )}
           >
             <GitBranchIcon className="size-2.5" />
-            <span className="text-[10px] leading-tight font-medium">Diff to {defaultBranchName}</span>
+            <span className="text-[10px] leading-tight font-medium">
+              Diff to {defaultBranchName}
+            </span>
           </div>
         </button>
       )}
