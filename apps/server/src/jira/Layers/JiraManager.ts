@@ -9,6 +9,13 @@ function limitContext(value: string, maxChars: number): string {
   return `${value.slice(0, maxChars)}\n\n[truncated]`;
 }
 
+function formatComments(
+  comments: ReadonlyArray<{ author: string; body: string; created: string }>,
+): string {
+  if (comments.length === 0) return "";
+  return comments.map((c) => `[${c.created}] ${c.author}: ${c.body}`).join("\n\n");
+}
+
 export const makeJiraManager = Effect.gen(function* () {
   const jiraCli = yield* JiraCli;
   const textGeneration = yield* TextGeneration;
@@ -23,6 +30,9 @@ export const makeJiraManager = Effect.gen(function* () {
 
   const listIssues: JiraManagerShape["listIssues"] = (input) => jiraCli.listIssues(input);
 
+  const listTransitions: JiraManagerShape["listTransitions"] = (input) =>
+    jiraCli.listTransitions(input);
+
   const generateTicketContent: JiraManagerShape["generateTicketContent"] = (input) =>
     textGeneration.generateJiraTicketContent({
       conversationContext: limitContext(input.conversationContext, 20_000),
@@ -30,17 +40,17 @@ export const makeJiraManager = Effect.gen(function* () {
     });
 
   const generateProgressComment: JiraManagerShape["generateProgressComment"] = (input) =>
-    textGeneration.generateJiraProgressComment({
-      ticketKey: input.ticketKey,
-      ticketTitle: input.ticketTitle,
-      recentConversation: limitContext(input.recentConversation, 20_000),
-    });
-
-  const generateCompletionSummary: JiraManagerShape["generateCompletionSummary"] = (input) =>
-    textGeneration.generateJiraCompletionSummary({
-      ticketKey: input.ticketKey,
-      ticketTitle: input.ticketTitle,
-      fullConversation: limitContext(input.fullConversation, 30_000),
+    Effect.gen(function* () {
+      const issue = yield* jiraCli.viewIssue({ key: input.ticketKey });
+      return yield* textGeneration.generateJiraProgressComment({
+        ticketKey: input.ticketKey,
+        ticketTitle: issue.summary,
+        ticketDescription: issue.description,
+        ticketStatus: issue.status,
+        ticketType: issue.type,
+        ticketComments: formatComments(issue.comments),
+        recentConversation: limitContext(input.recentConversation, 20_000),
+      });
     });
 
   return {
@@ -49,9 +59,9 @@ export const makeJiraManager = Effect.gen(function* () {
     moveIssue,
     addComment,
     listIssues,
+    listTransitions,
     generateTicketContent,
     generateProgressComment,
-    generateCompletionSummary,
   } satisfies JiraManagerShape;
 });
 

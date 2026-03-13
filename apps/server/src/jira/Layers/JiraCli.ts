@@ -1,215 +1,310 @@
 import { Effect, Layer } from "effect";
 
-import { runProcess } from "../../processRunner";
 import { JiraCliError } from "../Errors.ts";
 import { JiraCli, type JiraCliShape } from "../Services/JiraCli.ts";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
-function normalizeJiraCliError(operation: string, error: unknown): JiraCliError {
-  if (error instanceof Error) {
-    if (error.message.includes("Command not found: jira")) {
-      return new JiraCliError({
-        operation,
-        detail: "Jira CLI (`jira`) is required but not available on PATH.",
-        cause: error,
-      });
-    }
+interface JiraRestConfig {
+  readonly baseUrl: string;
+  readonly email: string;
+  readonly apiToken: string;
+}
 
-    const lower = error.message.toLowerCase();
-    if (
-      lower.includes("authentication failed") ||
-      lower.includes("not logged in") ||
-      lower.includes("login first")
-    ) {
-      return new JiraCliError({
-        operation,
-        detail: "Jira CLI is not authenticated. Run `jira init` and retry.",
-        cause: error,
-      });
-    }
+function readConfig(): JiraRestConfig | null {
+  const baseUrl = process.env.JIRA_BASE_URL?.replace(/\/+$/, "");
+  const email = process.env.JIRA_USER_EMAIL;
+  const apiToken = process.env.JIRA_API_TOKEN;
+  if (!baseUrl || !email || !apiToken) return null;
+  return { baseUrl, email, apiToken };
+}
 
-    if (lower.includes("not found") || lower.includes("does not exist")) {
-      return new JiraCliError({
-        operation,
-        detail: "Jira issue not found. Check the issue key and try again.",
-        cause: error,
-      });
-    }
+async function jiraFetch(
+  config: JiraRestConfig,
+  path: string,
+  options: { method?: string; body?: unknown; timeoutMs?: number } = {},
+): Promise<unknown> {
+  const url = `${config.baseUrl}/rest/api/3${path}`;
+  const auth = Buffer.from(`${config.email}:${config.apiToken}`).toString("base64");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
 
-    return new JiraCliError({
-      operation,
-      detail: `Jira CLI command failed: ${error.message}`,
-      cause: error,
+  try {
+    const response = await fetch(url, {
+      method: options.method ?? "GET",
+      headers: {
+        Authorization: `Basic ${auth}`,
+        Accept: "application/json",
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined,
+      signal: controller.signal,
     });
-  }
 
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(`Jira API ${response.status}: ${text}`);
+    }
+
+    const text = await response.text();
+    return text.length > 0 ? JSON.parse(text) : {};
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function notConfiguredError(operation: string): JiraCliError {
   return new JiraCliError({
     operation,
-    detail: "Jira CLI command failed.",
-    cause: error,
+    detail:
+      "Jira integration is not configured. Set JIRA_BASE_URL, JIRA_USER_EMAIL, and JIRA_API_TOKEN environment variables.",
   });
 }
 
-function parseIssueKeyFromStdout(stdout: string): string | null {
-  const match = /([A-Z][A-Z0-9]+-\d+)/.exec(stdout);
-  return match?.[1] ?? null;
+/** Extract plain text from Atlassian Document Format (ADF). */
+function adfToPlainText(node: unknown): string {
+  if (!node || typeof node !== "object") return "";
+  const n = node as Record<string, unknown>;
+  if (n.type === "text" && typeof n.text === "string") return n.text;
+  if (Array.isArray(n.content)) {
+    return (n.content as unknown[]).map(adfToPlainText).join("");
+  }
+  return "";
 }
 
-function parseJsonSafe(raw: string, operation: string): unknown {
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) {
-    throw new Error(`Jira CLI returned empty response for ${operation}.`);
-  }
-  return JSON.parse(trimmed);
+/** Lazily fetch and cache the current user's Jira accountId. */
+function createAccountIdResolver(config: JiraRestConfig) {
+  let cached: string | null = null;
+  return async (): Promise<string | null> => {
+    if (cached) return cached;
+    try {
+      const data = (await jiraFetch(config, "/myself")) as Record<string, any>;
+      cached = typeof data.accountId === "string" ? data.accountId : null;
+    } catch {
+      cached = null;
+    }
+    return cached;
+  };
 }
 
 const makeJiraCli = Effect.sync(() => {
-  const execute: JiraCliShape["execute"] = (input) =>
-    Effect.tryPromise({
-      try: () =>
-        runProcess("jira", input.args, {
-          timeoutMs: input.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-        }),
-      catch: (error) => normalizeJiraCliError("execute", error),
-    });
+  const config = readConfig();
+  const getAccountId = config ? createAccountIdResolver(config) : null;
+
+  const execute: JiraCliShape["execute"] = () =>
+    Effect.fail(
+      new JiraCliError({
+        operation: "execute",
+        detail: "Raw CLI execution is not supported with the REST API backend.",
+      }),
+    );
 
   const service = {
     execute,
 
-    viewIssue: (input) =>
-      execute({
-        args: ["issue", "view", input.key, "--raw"],
-      }).pipe(
-        Effect.flatMap((result) =>
-          Effect.try({
-            try: () => {
-              const parsed = parseJsonSafe(result.stdout, "viewIssue") as Record<string, any>;
-              const fields = (parsed.fields ?? {}) as Record<string, any>;
-              return {
-                key: String(parsed.key ?? input.key),
-                url: String(parsed.url ?? ""),
-                summary: String(parsed.summary ?? fields.summary ?? ""),
-                status: String(parsed.status ?? fields.status?.name ?? "Unknown"),
-                type: String(parsed.type ?? fields.issuetype?.name ?? "Task"),
-                priority: String(parsed.priority ?? fields.priority?.name ?? "Medium"),
-                description: String(parsed.description ?? fields.description ?? ""),
-              };
-            },
-            catch: (error: unknown) =>
-              new JiraCliError({
-                operation: "viewIssue",
-                detail:
-                  error instanceof Error
-                    ? `Failed to parse Jira issue: ${error.message}`
-                    : "Failed to parse Jira issue response.",
-                ...(error !== undefined ? { cause: error } : {}),
-              }),
+    viewIssue: (input) => {
+      if (!config) return Effect.fail(notConfiguredError("viewIssue"));
+      return Effect.tryPromise({
+        try: async () => {
+          const data = (await jiraFetch(
+            config,
+            `/issue/${encodeURIComponent(input.key)}`,
+          )) as Record<string, any>;
+          const fields = (data.fields ?? {}) as Record<string, any>;
+          const rawComments = (fields.comment?.comments ?? []) as Array<Record<string, any>>;
+          const comments = rawComments.map((c) => ({
+            author: String(c.author?.displayName ?? c.author?.emailAddress ?? "Unknown"),
+            body: typeof c.body === "string" ? c.body : adfToPlainText(c.body),
+            created: String(c.created ?? ""),
+          }));
+          return {
+            key: String(data.key ?? input.key),
+            url: `${config.baseUrl}/browse/${data.key ?? input.key}`,
+            summary: String(fields.summary ?? ""),
+            status: String(fields.status?.name ?? "Unknown"),
+            type: String(fields.issuetype?.name ?? "Task"),
+            priority: String(fields.priority?.name ?? "Medium"),
+            description:
+              typeof fields.description === "string"
+                ? fields.description
+                : adfToPlainText(fields.description),
+            comments,
+          };
+        },
+        catch: (error) =>
+          new JiraCliError({
+            operation: "viewIssue",
+            detail: error instanceof Error ? error.message : "Failed to view Jira issue.",
+            ...(error !== undefined ? { cause: error } : {}),
           }),
-        ),
-      ),
+      });
+    },
 
-    createIssue: (input) =>
-      execute({
-        args: [
-          "issue",
-          "create",
-          "--project",
-          input.projectKey,
-          "--type",
-          input.type,
-          "--priority",
-          input.priority,
-          "--summary",
-          input.summary,
-          "--description",
-          input.description,
-          "--no-input",
-        ],
-      }).pipe(
-        Effect.flatMap((result) =>
-          Effect.try({
-            try: () => {
-              const key = parseIssueKeyFromStdout(result.stdout);
-              if (!key) {
-                throw new Error("Could not extract issue key from Jira CLI output.");
-              }
-              return {
-                key,
-                url: "",
-              };
+    createIssue: (input) => {
+      if (!config) return Effect.fail(notConfiguredError("createIssue"));
+      return Effect.tryPromise({
+        try: async () => {
+          const accountId = await getAccountId!();
+          const body = {
+            fields: {
+              project: { key: input.projectKey },
+              issuetype: { name: input.type },
+              priority: { name: input.priority },
+              summary: input.summary,
+              ...(accountId ? { assignee: { accountId } } : {}),
+              description: {
+                type: "doc",
+                version: 1,
+                content: [
+                  {
+                    type: "paragraph",
+                    content: [{ type: "text", text: input.description || "Created via T3 Code" }],
+                  },
+                ],
+              },
             },
-            catch: (error: unknown) =>
-              new JiraCliError({
-                operation: "createIssue",
-                detail:
-                  error instanceof Error
-                    ? `Failed to parse create result: ${error.message}`
-                    : "Failed to parse Jira create issue response.",
-                ...(error !== undefined ? { cause: error } : {}),
-              }),
+          };
+          const data = (await jiraFetch(config, "/issue", {
+            method: "POST",
+            body,
+          })) as Record<string, any>;
+          const key = String(data.key ?? "");
+          return {
+            key,
+            url: `${config.baseUrl}/browse/${key}`,
+          };
+        },
+        catch: (error) =>
+          new JiraCliError({
+            operation: "createIssue",
+            detail: error instanceof Error ? error.message : "Failed to create Jira issue.",
+            ...(error !== undefined ? { cause: error } : {}),
           }),
-        ),
-      ),
+      });
+    },
 
-    moveIssue: (input) =>
-      execute({
-        args: ["issue", "move", input.key, input.targetStatus],
-      }).pipe(
-        Effect.map(() => ({
-          key: input.key,
-          newStatus: input.targetStatus,
-        })),
-      ),
+    moveIssue: (input) => {
+      if (!config) return Effect.fail(notConfiguredError("moveIssue"));
+      return Effect.tryPromise({
+        try: async () => {
+          // First, get available transitions
+          const transitionsData = (await jiraFetch(
+            config,
+            `/issue/${encodeURIComponent(input.key)}/transitions`,
+          )) as Record<string, any>;
+          const transitions = (transitionsData.transitions ?? []) as Array<Record<string, any>>;
+          const target = transitions.find(
+            (t) => t.name?.toLowerCase() === input.targetStatus.toLowerCase(),
+          );
+          if (!target) {
+            const available = transitions.map((t) => t.name).join(", ");
+            throw new Error(
+              `Transition "${input.targetStatus}" not found. Available: ${available}`,
+            );
+          }
+          await jiraFetch(config, `/issue/${encodeURIComponent(input.key)}/transitions`, {
+            method: "POST",
+            body: { transition: { id: target.id } },
+          });
+          return { key: input.key, newStatus: input.targetStatus };
+        },
+        catch: (error) =>
+          new JiraCliError({
+            operation: "moveIssue",
+            detail: error instanceof Error ? error.message : "Failed to move Jira issue.",
+            ...(error !== undefined ? { cause: error } : {}),
+          }),
+      });
+    },
 
-    addComment: (input) =>
-      execute({
-        args: ["issue", "comment", "add", input.key, input.comment],
-      }).pipe(
-        Effect.map(() => ({
-          key: input.key,
-        })),
-      ),
-
-    listIssues: (input) =>
-      execute({
-        args: [
-          "issue",
-          "list",
-          ...(input.projectKey ? ["--project", input.projectKey] : []),
-          ...(input.jql ? ["--jql", input.jql] : []),
-          "--raw",
-        ],
-      }).pipe(
-        Effect.flatMap((result) =>
-          Effect.try({
-            try: () => {
-              const parsed = parseJsonSafe(result.stdout, "listIssues");
-              const items = Array.isArray(parsed) ? parsed : [];
-              return {
-                issues: items.map((item: Record<string, any>) => {
-                  const fields = (item.fields ?? {}) as Record<string, any>;
-                  return {
-                    key: String(item.key ?? ""),
-                    summary: String(item.summary ?? fields.summary ?? ""),
-                    status: String(item.status ?? fields.status?.name ?? "Unknown"),
-                    type: String(item.type ?? fields.issuetype?.name ?? "Task"),
-                  };
-                }),
-              };
+    addComment: (input) => {
+      if (!config) return Effect.fail(notConfiguredError("addComment"));
+      return Effect.tryPromise({
+        try: async () => {
+          await jiraFetch(config, `/issue/${encodeURIComponent(input.key)}/comment`, {
+            method: "POST",
+            body: {
+              body: {
+                type: "doc",
+                version: 1,
+                content: [
+                  {
+                    type: "paragraph",
+                    content: [{ type: "text", text: input.comment }],
+                  },
+                ],
+              },
             },
-            catch: (error: unknown) =>
-              new JiraCliError({
-                operation: "listIssues",
-                detail:
-                  error instanceof Error
-                    ? `Failed to parse issue list: ${error.message}`
-                    : "Failed to parse Jira issue list response.",
-                ...(error !== undefined ? { cause: error } : {}),
-              }),
+          });
+          return { key: input.key };
+        },
+        catch: (error) =>
+          new JiraCliError({
+            operation: "addComment",
+            detail: error instanceof Error ? error.message : "Failed to add Jira comment.",
+            ...(error !== undefined ? { cause: error } : {}),
           }),
-        ),
-      ),
+      });
+    },
+
+    listIssues: (input) => {
+      if (!config) return Effect.fail(notConfiguredError("listIssues"));
+      return Effect.tryPromise({
+        try: async () => {
+          const jql =
+            input.jql ??
+            (input.projectKey
+              ? `project = ${input.projectKey} ORDER BY updated DESC`
+              : "ORDER BY updated DESC");
+          const data = (await jiraFetch(
+            config,
+            `/search/jql?jql=${encodeURIComponent(jql)}&maxResults=50&fields=summary,status,issuetype`,
+          )) as Record<string, any>;
+          const issues = (data.issues ?? []) as Array<Record<string, any>>;
+          return {
+            issues: issues.map((item) => {
+              const fields = (item.fields ?? {}) as Record<string, any>;
+              return {
+                key: String(item.key ?? ""),
+                summary: String(fields.summary ?? ""),
+                status: String(fields.status?.name ?? "Unknown"),
+                type: String(fields.issuetype?.name ?? "Task"),
+              };
+            }),
+          };
+        },
+        catch: (error) =>
+          new JiraCliError({
+            operation: "listIssues",
+            detail: error instanceof Error ? error.message : "Failed to list Jira issues.",
+            ...(error !== undefined ? { cause: error } : {}),
+          }),
+      });
+    },
+    listTransitions: (input) => {
+      if (!config) return Effect.fail(notConfiguredError("listTransitions"));
+      return Effect.tryPromise({
+        try: async () => {
+          const data = (await jiraFetch(
+            config,
+            `/issue/${encodeURIComponent(input.key)}/transitions`,
+          )) as Record<string, any>;
+          const transitions = (data.transitions ?? []) as Array<Record<string, any>>;
+          return {
+            transitions: transitions.map((t) => ({
+              id: String(t.id ?? ""),
+              name: String(t.name ?? ""),
+            })),
+          };
+        },
+        catch: (error) =>
+          new JiraCliError({
+            operation: "listTransitions",
+            detail: error instanceof Error ? error.message : "Failed to list transitions.",
+            ...(error !== undefined ? { cause: error } : {}),
+          }),
+      });
+    },
   } satisfies JiraCliShape;
 
   return service;

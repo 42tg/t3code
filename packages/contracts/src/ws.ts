@@ -35,7 +35,7 @@ import {
   JiraIssueListInput,
   JiraGenerateTicketContentInput,
   JiraGenerateProgressCommentInput,
-  JiraGenerateCompletionSummaryInput,
+  JiraListTransitionsInput,
 } from "./jira";
 import {
   TerminalClearInput,
@@ -82,14 +82,15 @@ export const WS_METHODS = {
   gitListOpenPrs: "git.listOpenPrs",
 
   // Jira methods
+  jiraIsConfigured: "jira.isConfigured",
   jiraViewIssue: "jira.viewIssue",
   jiraCreateIssue: "jira.createIssue",
   jiraMoveIssue: "jira.moveIssue",
   jiraAddComment: "jira.addComment",
   jiraListIssues: "jira.listIssues",
+  jiraListTransitions: "jira.listTransitions",
   jiraGenerateTicketContent: "jira.generateTicketContent",
   jiraGenerateProgressComment: "jira.generateProgressComment",
-  jiraGenerateCompletionSummary: "jira.generateCompletionSummary",
 
   // Terminal methods
   terminalOpen: "terminal.open",
@@ -160,14 +161,15 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.gitListOpenPrs, GitListOpenPrsInput),
 
   // Jira methods
+  tagRequestBody(WS_METHODS.jiraIsConfigured, Schema.Struct({})),
   tagRequestBody(WS_METHODS.jiraViewIssue, JiraIssueViewInput),
   tagRequestBody(WS_METHODS.jiraCreateIssue, JiraIssueCreateInput),
   tagRequestBody(WS_METHODS.jiraMoveIssue, JiraIssueMoveInput),
   tagRequestBody(WS_METHODS.jiraAddComment, JiraCommentAddInput),
   tagRequestBody(WS_METHODS.jiraListIssues, JiraIssueListInput),
+  tagRequestBody(WS_METHODS.jiraListTransitions, JiraListTransitionsInput),
   tagRequestBody(WS_METHODS.jiraGenerateTicketContent, JiraGenerateTicketContentInput),
   tagRequestBody(WS_METHODS.jiraGenerateProgressComment, JiraGenerateProgressCommentInput),
-  tagRequestBody(WS_METHODS.jiraGenerateCompletionSummary, JiraGenerateCompletionSummaryInput),
 
   // Terminal methods
   tagRequestBody(WS_METHODS.terminalOpen, TerminalOpenInput),

@@ -134,17 +134,17 @@ export function createWsNativeApi(): NativeApi {
       },
     },
     jira: {
+      isConfigured: () => transport.request(WS_METHODS.jiraIsConfigured, {}),
       viewIssue: (input) => transport.request(WS_METHODS.jiraViewIssue, input),
       createIssue: (input) => transport.request(WS_METHODS.jiraCreateIssue, input),
       moveIssue: (input) => transport.request(WS_METHODS.jiraMoveIssue, input),
       addComment: (input) => transport.request(WS_METHODS.jiraAddComment, input),
       listIssues: (input) => transport.request(WS_METHODS.jiraListIssues, input),
+      listTransitions: (input) => transport.request(WS_METHODS.jiraListTransitions, input),
       generateTicketContent: (input) =>
         transport.request(WS_METHODS.jiraGenerateTicketContent, input),
       generateProgressComment: (input) =>
         transport.request(WS_METHODS.jiraGenerateProgressComment, input),
-      generateCompletionSummary: (input) =>
-        transport.request(WS_METHODS.jiraGenerateCompletionSummary, input),
     },
     git: {
       pull: (input) => transport.request(WS_METHODS.gitPull, input),

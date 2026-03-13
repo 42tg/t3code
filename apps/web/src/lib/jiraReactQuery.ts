@@ -5,16 +5,31 @@ import type {
   JiraCommentAddInput,
   JiraGenerateTicketContentInput,
   JiraGenerateProgressCommentInput,
-  JiraGenerateCompletionSummaryInput,
 } from "@t3tools/contracts";
 import { mutationOptions, queryOptions, type QueryClient } from "@tanstack/react-query";
 import { ensureNativeApi } from "../nativeApi";
 
 export const jiraQueryKeys = {
   all: ["jira"] as const,
+  configured: ["jira", "configured"] as const,
   issue: (key: string | null) => ["jira", "issue", key] as const,
   issues: (projectKey: string | null) => ["jira", "issues", projectKey] as const,
+  myOpenIssues: ["jira", "myOpenIssues"] as const,
 };
+
+export function jiraIsConfiguredQueryOptions() {
+  return queryOptions({
+    queryKey: jiraQueryKeys.configured,
+    queryFn: async () => {
+      const api = ensureNativeApi();
+      return api.jira.isConfigured();
+    },
+    staleTime: Infinity,
+    retry: 3,
+    retryDelay: 1000,
+    refetchOnWindowFocus: false,
+  });
+}
 
 export const jiraMutationKeys = {
   createIssue: ["jira", "mutation", "createIssue"] as const,
@@ -22,7 +37,6 @@ export const jiraMutationKeys = {
   addComment: ["jira", "mutation", "addComment"] as const,
   generateTicketContent: ["jira", "mutation", "generateTicketContent"] as const,
   generateProgressComment: ["jira", "mutation", "generateProgressComment"] as const,
-  generateCompletionSummary: ["jira", "mutation", "generateCompletionSummary"] as const,
 };
 
 export function invalidateJiraQueries(queryClient: QueryClient) {
@@ -52,6 +66,32 @@ export function jiraListIssuesQueryOptions(projectKey: string | null) {
       return api.jira.listIssues({ projectKey });
     },
     enabled: projectKey !== null && projectKey.length > 0,
+    staleTime: 30_000,
+  });
+}
+
+export function jiraListTransitionsQueryOptions(key: string | null) {
+  return queryOptions({
+    queryKey: [...jiraQueryKeys.all, "transitions", key] as const,
+    queryFn: async () => {
+      const api = ensureNativeApi();
+      if (!key) throw new Error("Jira issue key is required.");
+      return api.jira.listTransitions({ key });
+    },
+    enabled: key !== null && key.length > 0,
+    staleTime: 60_000,
+  });
+}
+
+export function jiraMyOpenIssuesQueryOptions() {
+  return queryOptions({
+    queryKey: jiraQueryKeys.myOpenIssues,
+    queryFn: async () => {
+      const api = ensureNativeApi();
+      return api.jira.listIssues({
+        jql: "assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC",
+      });
+    },
     staleTime: 30_000,
   });
 }
@@ -111,16 +151,6 @@ export function jiraGenerateProgressCommentMutationOptions() {
     mutationFn: async (params: JiraGenerateProgressCommentInput) => {
       const api = ensureNativeApi();
       return api.jira.generateProgressComment(params);
-    },
-  });
-}
-
-export function jiraGenerateCompletionSummaryMutationOptions() {
-  return mutationOptions({
-    mutationKey: jiraMutationKeys.generateCompletionSummary,
-    mutationFn: async (params: JiraGenerateCompletionSummaryInput) => {
-      const api = ensureNativeApi();
-      return api.jira.generateCompletionSummary(params);
     },
   });
 }

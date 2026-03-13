@@ -1,5 +1,6 @@
 import { Effect, FileSystem, Layer, Option, Path, Schema, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import { query as claudeQuery, type SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
 
 import { sanitizeBranchFragment, sanitizeFeatureBranchName } from "@t3tools/shared/git";
 
@@ -12,7 +13,6 @@ import {
   type CommitMessageGenerationResult,
   type JiraTicketContentGenerationResult,
   type JiraProgressCommentGenerationResult,
-  type JiraCompletionSummaryGenerationResult,
   type PrContentGenerationResult,
   type TextGenerationShape,
   TextGeneration,
@@ -415,104 +415,172 @@ const makeCodexTextGeneration = Effect.gen(function* () {
     });
   };
 
+  /**
+   * Run a simple prompt via the Claude agent SDK query() and parse JSON output.
+   * Uses haiku model with no tools for fast, lightweight text generation.
+   */
+  const runAgentQuery = <T>(
+    operation: string,
+    prompt: string,
+    jsonSchema: Record<string, unknown>,
+    parse: (result: unknown) => T,
+    systemPrompt?: string,
+  ): Effect.Effect<T, TextGenerationError> =>
+    Effect.tryPromise({
+      try: async () => {
+        const session = claudeQuery({
+          prompt,
+          options: {
+            model: "claude-haiku-4-5-20251001",
+            permissionMode: "plan",
+            systemPrompt:
+              systemPrompt ??
+              "You generate structured content for Jira tickets. Your output will be captured as structured JSON automatically — just write the content naturally without JSON formatting. Never ask for clarification or refuse — always produce your best output with the context provided.",
+            outputFormat: { type: "json_schema", schema: jsonSchema },
+            maxTurns: 5,
+            thinking: { type: "disabled" },
+          },
+        });
+        // Consume the async generator to get the result message
+        let resultMessage: SDKResultMessage | null = null;
+        for await (const message of session) {
+          if (message.type === "result") {
+            resultMessage = message as SDKResultMessage;
+          }
+        }
+        if (!resultMessage) {
+          throw new Error("No result message received from agent query");
+        }
+        if (resultMessage.subtype !== "success") {
+          const errors = resultMessage.errors.join("; ");
+          throw new Error(
+            `Agent query failed (${resultMessage.subtype}): ${errors || "unknown error"}`,
+          );
+        }
+        if (resultMessage.structured_output != null) {
+          return parse(resultMessage.structured_output);
+        }
+        return parse(JSON.parse(resultMessage.result));
+      },
+      catch: (error) =>
+        new TextGenerationError({
+          operation,
+          detail: error instanceof Error ? error.message : "Agent query failed",
+          cause: error,
+        }),
+    });
+
   const generateJiraTicketContent: TextGenerationShape["generateJiraTicketContent"] = (input) => {
     const prompt = [
-      "You create Jira ticket content from conversation context.",
-      "Return a JSON object with keys: summary, description.",
+      `Create a Jira ticket for project ${input.projectKey} based on the conversation below.`,
+      "",
+      "For the summary field: write a concise imperative title (e.g. 'Add retry logic for failed API calls').",
+      "",
+      "For the description field, use EXACTLY this format:",
+      "",
+      "Background:",
+      "<brief context>",
+      "",
+      "Tasks:",
+      "- <specific thing to implement or change>",
+      "",
+      "Acceptance criteria:",
+      "- <verifiable condition for done>",
+      "",
       "Rules:",
-      "- summary: concise ticket title (imperative, 5-15 words)",
-      "- description: markdown body with context, acceptance criteria, and scope",
+      "- NEVER ask for clarification — this is a one-shot generation with no follow-up",
+      "- Always produce output in the format above, using whatever context is available",
+      "- Only include bullet points you are confident about — do not invent requirements",
+      "- No markdown headers (#), no code fences, no bold/italic",
+      "- Be specific — mention files, APIs, or components where relevant",
       "",
-      `Project key: ${input.projectKey}`,
-      "",
-      "Conversation context:",
+      "--- CONVERSATION ---",
       limitSection(input.conversationContext, 16_000),
+      "--- END CONVERSATION ---",
     ].join("\n");
 
-    return runClaudeJson({
-      operation: "generateCommitMessage",
-      cwd: process.cwd(),
+    return runAgentQuery(
+      "generateJiraTicketContent",
       prompt,
-      outputSchemaJson: Schema.Struct({
-        summary: Schema.String,
-        description: Schema.String,
-      }),
-    }).pipe(
-      Effect.map(
-        (generated) =>
-          ({
-            summary: generated.summary.trim(),
-            description: generated.description.trim(),
-          }) satisfies JiraTicketContentGenerationResult,
-      ),
+      {
+        type: "object",
+        properties: {
+          summary: { type: "string" },
+          description: { type: "string" },
+        },
+        required: ["summary", "description"],
+      },
+      (raw) => {
+        const obj = raw as { summary: string; description: string };
+        return {
+          summary: obj.summary.trim(),
+          description: obj.description.trim(),
+        } satisfies JiraTicketContentGenerationResult;
+      },
     );
   };
 
   const generateJiraProgressComment: TextGenerationShape["generateJiraProgressComment"] = (
     input,
   ) => {
+    const hasComments = input.ticketComments.length > 0;
     const prompt = [
-      "You write concise Jira progress comments.",
-      "Return a JSON object with key: comment.",
-      "Rules:",
-      "- Summarize what was accomplished in the conversation",
-      "- Use bullet points for key changes",
-      "- Keep it factual and brief (3-8 bullet points)",
+      "--- TICKET ---",
+      `Key: ${input.ticketKey}`,
+      `Type: ${input.ticketType}`,
+      `Status: ${input.ticketStatus}`,
+      `Summary: ${input.ticketTitle}`,
+      `Description: ${limitSection(input.ticketDescription, 3_000)}`,
+      "--- END TICKET ---",
       "",
-      `Ticket: ${input.ticketKey} - ${input.ticketTitle}`,
-      "",
-      "Recent conversation:",
+      "--- CONVERSATION ---",
       limitSection(input.recentConversation, 16_000),
-    ].join("\n");
-
-    return runClaudeJson({
-      operation: "generateCommitMessage",
-      cwd: process.cwd(),
-      prompt,
-      outputSchemaJson: Schema.Struct({
-        comment: Schema.String,
-      }),
-    }).pipe(
-      Effect.map(
-        (generated) =>
-          ({
-            comment: generated.comment.trim(),
-          }) satisfies JiraProgressCommentGenerationResult,
-      ),
-    );
-  };
-
-  const generateJiraCompletionSummary: TextGenerationShape["generateJiraCompletionSummary"] = (
-    input,
-  ) => {
-    const prompt = [
-      "You write Jira completion summaries for finished work.",
-      "Return a JSON object with key: comment.",
+      "--- END CONVERSATION ---",
+      "",
+      ...(hasComments
+        ? [
+            "--- COMMENTS ALREADY ON THE TICKET (posted earlier — everything below is OLD news) ---",
+            limitSection(input.ticketComments, 4_000),
+            "--- END OLD COMMENTS ---",
+            "",
+            `Now write the NEXT progress comment for ${input.ticketKey}. Only mention work from the conversation that is NOT in the old comments above. If a topic appears in the old comments, skip it completely.`,
+          ]
+        : [`Write a progress update comment for Jira ticket ${input.ticketKey}.`]),
+      "",
+      "Output format:",
+      "",
+      "Progress update:",
+      "- <what was done>",
+      "",
+      "Next steps:",
+      "- <what remains>",
+      "",
       "Rules:",
-      "- Summarize the full scope of work completed",
-      "- Include key changes, files modified, and testing notes",
-      "- Use bullet points, keep it factual (5-12 bullet points)",
-      "",
-      `Ticket: ${input.ticketKey} - ${input.ticketTitle}`,
-      "",
-      "Full conversation:",
-      limitSection(input.fullConversation, 24_000),
+      "- NEVER ask for clarification — always produce output",
+      "- Only include points you are confident about",
+      "- Be specific — mention file names, function names, or features",
+      "- No markdown headers (#), no code fences, no bold/italic",
+      "- Omit Next steps if nothing is clearly outstanding",
+      '- If there is genuinely nothing new to report, just output: "No new progress since last update." — nothing else',
     ].join("\n");
 
-    return runClaudeJson({
-      operation: "generateCommitMessage",
-      cwd: process.cwd(),
+    const systemPrompt = hasComments
+      ? "You write Jira progress comments. You are writing a CONTINUATION of an existing comment thread. Your job is to add only NEW information. If something was already said in a previous comment, you must skip it entirely. If nothing new happened, say so in one short sentence — do not explain why. Never ask for clarification. Output is captured as JSON automatically."
+      : undefined;
+
+    return runAgentQuery(
+      "generateJiraProgressComment",
       prompt,
-      outputSchemaJson: Schema.Struct({
-        comment: Schema.String,
-      }),
-    }).pipe(
-      Effect.map(
-        (generated) =>
-          ({
-            comment: generated.comment.trim(),
-          }) satisfies JiraCompletionSummaryGenerationResult,
-      ),
+      {
+        type: "object",
+        properties: { comment: { type: "string" } },
+        required: ["comment"],
+      },
+      (raw) => {
+        const obj = raw as { comment: string };
+        return { comment: obj.comment.trim() } satisfies JiraProgressCommentGenerationResult;
+      },
+      systemPrompt,
     );
   };
 
@@ -522,7 +590,6 @@ const makeCodexTextGeneration = Effect.gen(function* () {
     generateBranchName,
     generateJiraTicketContent,
     generateJiraProgressComment,
-    generateJiraCompletionSummary,
   } satisfies TextGenerationShape;
 });
 

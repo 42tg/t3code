@@ -21,6 +21,7 @@ import {
   OrchestrationThreadActivity,
   RuntimeMode,
   ProviderInteractionMode,
+  type LinkedJiraTicket,
 } from "@t3tools/contracts";
 import {
   getDefaultModel,
@@ -124,6 +125,7 @@ import {
 import { ApprovalDiffView } from "./ApprovalDiffView";
 import BranchToolbar from "./BranchToolbar";
 import GitActionsControl from "./GitActionsControl";
+import { JiraActionsControl } from "./JiraActionsControl";
 import {
   isOpenFavoriteEditorShortcut,
   resolveShortcutCommand,
@@ -532,9 +534,7 @@ function AgentExecutionContainer({
           )}
         />
         <div className="min-w-0 flex-1">
-          <p className="text-[12px] font-medium leading-snug text-foreground/80">
-            {description}
-          </p>
+          <p className="text-[12px] font-medium leading-snug text-foreground/80">{description}</p>
           <p className="mt-0.5 text-[10px] text-muted-foreground/50">
             {isLive ? (
               <>
@@ -3926,6 +3926,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
           diffToggleShortcutLabel={diffPanelShortcutLabel}
           gitCwd={gitCwd}
           diffOpen={diffOpen}
+          linkedJiraTicket={activeThread.linkedJiraTicket}
           sessionProvider={activeThread.session?.provider ?? null}
           providerSessionId={activeThread.session?.providerSessionId ?? null}
           onRunProjectScript={(script) => {
@@ -4669,6 +4670,7 @@ interface ChatHeaderProps {
   availableEditors: ReadonlyArray<EditorId>;
   diffToggleShortcutLabel: string | null;
   gitCwd: string | null;
+  linkedJiraTicket: LinkedJiraTicket | null;
   diffOpen: boolean;
   sessionProvider: string | null;
   providerSessionId: string | null;
@@ -4691,6 +4693,7 @@ const ChatHeader = memo(function ChatHeader({
   availableEditors,
   diffToggleShortcutLabel,
   gitCwd,
+  linkedJiraTicket,
   diffOpen,
   sessionProvider,
   providerSessionId,
@@ -4701,8 +4704,8 @@ const ChatHeader = memo(function ChatHeader({
   onToggleDiff,
 }: ChatHeaderProps) {
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-2">
-      <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden sm:gap-3">
+    <div className="flex min-w-0 flex-1 flex-col gap-1 md:flex-row md:items-center md:gap-2">
+      <div className="flex min-w-0 items-center gap-2 md:flex-1 md:gap-3">
         <SidebarTrigger className="size-7 shrink-0 md:hidden" />
         <h2
           className="min-w-0 shrink truncate text-sm font-medium text-foreground"
@@ -4711,7 +4714,7 @@ const ChatHeader = memo(function ChatHeader({
           {activeThreadTitle}
         </h2>
         {activeProjectName && (
-          <Badge variant="outline" className="min-w-0 shrink truncate">
+          <Badge variant="outline" className="hidden min-w-0 shrink truncate md:inline-flex">
             {activeProjectName}
           </Badge>
         )}
@@ -4721,7 +4724,7 @@ const ChatHeader = memo(function ChatHeader({
           </Badge>
         )}
       </div>
-      <div className="@container/header-actions flex min-w-0 flex-1 items-center justify-end gap-2 @sm/header-actions:gap-3">
+      <div className="@container/header-actions flex min-w-0 flex-1 items-center justify-end gap-1 @sm/header-actions:gap-2">
         {activeProjectScripts && (
           <ProjectScriptsControl
             scripts={activeProjectScripts}
@@ -4742,6 +4745,11 @@ const ChatHeader = memo(function ChatHeader({
             providerSessionId={providerSessionId}
           />
         )}
+        <JiraActionsControl
+          threadId={activeThreadId}
+          linkedJiraTicket={linkedJiraTicket}
+          onTicketLinked={() => {}}
+        />
         {activeProjectName && <GitActionsControl gitCwd={gitCwd} activeThreadId={activeThreadId} />}
         <Tooltip>
           <TooltipTrigger
@@ -5678,13 +5686,14 @@ const MessagesTimeline = memo(function MessagesTimeline({
             if (children && children.length > 0) {
               emittedAgentGroups.add(agentItemId);
               const agents = agentEntriesByItemId.get(agentItemId);
-              const agentEntry: WorkLogEntry = agents?.completed ?? agents?.started ?? {
-                id: `agent-group:${agentItemId}`,
-                createdAt: children[0]?.createdAt ?? entry.createdAt,
-                label: "Agent",
-                tone: "tool",
-                toolName: "Agent",
-              };
+              const agentEntry: WorkLogEntry = agents?.completed ??
+                agents?.started ?? {
+                  id: `agent-group:${agentItemId}`,
+                  createdAt: children[0]?.createdAt ?? entry.createdAt,
+                  label: "Agent",
+                  tone: "tool",
+                  toolName: "Agent",
+                };
               nextRows.push({
                 kind: "agent-execution",
                 id: `agent-group:${agentItemId}`,

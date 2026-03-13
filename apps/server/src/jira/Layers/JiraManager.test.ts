@@ -9,8 +9,7 @@ import { JiraCliError } from "../Errors.ts";
 
 function createFakeJiraCli(overrides: Partial<JiraCliShape> = {}): JiraCliShape {
   const defaults: JiraCliShape = {
-    execute: () =>
-      Effect.succeed({ stdout: "", stderr: "", code: 0, signal: null, timedOut: false }),
+    execute: () => Effect.fail(new JiraCliError({ operation: "execute", detail: "not supported" })),
     viewIssue: () =>
       Effect.succeed({
         key: "PROJ-1",
@@ -20,6 +19,7 @@ function createFakeJiraCli(overrides: Partial<JiraCliShape> = {}): JiraCliShape 
         type: "Task",
         priority: "Medium",
         description: "A test issue",
+        comments: [],
       }),
     createIssue: () =>
       Effect.succeed({
@@ -42,6 +42,13 @@ function createFakeJiraCli(overrides: Partial<JiraCliShape> = {}): JiraCliShape 
           { key: "PROJ-2", summary: "Another issue", status: "In Progress", type: "Bug" },
         ],
       }),
+    listTransitions: () =>
+      Effect.succeed({
+        transitions: [
+          { id: "1", name: "In Progress" },
+          { id: "2", name: "Done" },
+        ],
+      }),
   };
   return { ...defaults, ...overrides };
 }
@@ -54,7 +61,6 @@ function createFakeTextGeneration() {
     generateJiraTicketContent: () =>
       Effect.succeed({ summary: "Generated summary", description: "Generated description" }),
     generateJiraProgressComment: () => Effect.succeed({ comment: "Progress update" }),
-    generateJiraCompletionSummary: () => Effect.succeed({ comment: "Completion summary" }),
   };
 }
 
@@ -153,20 +159,6 @@ describe("JiraManager", () => {
       }),
     );
     expect(result.comment).toBe("Progress update");
-  });
-
-  it("generateCompletionSummary delegates to TextGeneration", async () => {
-    const result = await runWithLayer(
-      Effect.gen(function* () {
-        const manager = yield* JiraManager;
-        return yield* manager.generateCompletionSummary({
-          ticketKey: "PROJ-1",
-          ticketTitle: "Test issue",
-          fullConversation: "Full conversation",
-        });
-      }),
-    );
-    expect(result.comment).toBe("Completion summary");
   });
 
   it("generateTicketContent truncates long input", async () => {

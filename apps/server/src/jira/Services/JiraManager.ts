@@ -16,16 +16,27 @@ import {
   type JiraCommentAddResult,
   type JiraIssueListInput,
   type JiraIssueListResult,
-  type JiraGenerateTicketContentInput,
+  type JiraListTransitionsInput,
+  type JiraListTransitionsResult,
   type JiraGenerateTicketContentResult,
-  type JiraGenerateProgressCommentInput,
   type JiraGenerateProgressCommentResult,
-  type JiraGenerateCompletionSummaryInput,
-  type JiraGenerateCompletionSummaryResult,
 } from "@t3tools/contracts";
 import { ServiceMap } from "effect";
 import type { Effect } from "effect";
 import type { JiraManagerServiceError } from "../Errors.ts";
+
+/** Internal input for ticket content generation (wsServer resolves threadId → context). */
+export interface GenerateTicketContentInput {
+  conversationContext: string;
+  projectKey: string;
+}
+
+/** Internal input for progress comment generation. */
+export interface GenerateProgressCommentInput {
+  ticketKey: string;
+  ticketTitle: string;
+  recentConversation: string;
+}
 
 /**
  * JiraManagerShape - Service API for high-level Jira workflow actions.
@@ -51,17 +62,17 @@ export interface JiraManagerShape {
     input: JiraIssueListInput,
   ) => Effect.Effect<JiraIssueListResult, JiraManagerServiceError>;
 
+  readonly listTransitions: (
+    input: JiraListTransitionsInput,
+  ) => Effect.Effect<JiraListTransitionsResult, JiraManagerServiceError>;
+
   readonly generateTicketContent: (
-    input: JiraGenerateTicketContentInput,
+    input: GenerateTicketContentInput,
   ) => Effect.Effect<JiraGenerateTicketContentResult, JiraManagerServiceError>;
 
   readonly generateProgressComment: (
-    input: JiraGenerateProgressCommentInput,
+    input: GenerateProgressCommentInput,
   ) => Effect.Effect<JiraGenerateProgressCommentResult, JiraManagerServiceError>;
-
-  readonly generateCompletionSummary: (
-    input: JiraGenerateCompletionSummaryInput,
-  ) => Effect.Effect<JiraGenerateCompletionSummaryResult, JiraManagerServiceError>;
 }
 
 /**

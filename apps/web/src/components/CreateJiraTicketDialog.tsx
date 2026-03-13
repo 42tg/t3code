@@ -2,17 +2,34 @@ import { useCallback, useState } from "react";
 import type { LinkedJiraTicket } from "@t3tools/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  AlertCircleIcon,
+  ClipboardCopyIcon,
+  LoaderIcon,
+  SearchIcon,
+  SparklesIcon,
+} from "lucide-react";
+import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
+  DialogPanel,
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
+import { JiraIcon } from "./Icons";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import {
   jiraCreateIssueMutationOptions,
   jiraViewIssueQueryOptions,
+  jiraMyOpenIssuesQueryOptions,
   jiraGenerateTicketContentMutationOptions,
 } from "~/lib/jiraReactQuery";
 import { readNativeApi } from "~/nativeApi";
@@ -35,7 +52,6 @@ export function CreateJiraTicketDialog({
   const [keyInput, setKeyInput] = useState("");
   const [projectKey, setProjectKey] = useState("");
   const [issueType, setIssueType] = useState("Task");
-  const [priority, setPriority] = useState("Medium");
   const [summary, setSummary] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +62,7 @@ export function CreateJiraTicketDialog({
 
   const parsedKey = extractJiraKey(keyInput.trim());
   const issueQuery = useQuery(jiraViewIssueQueryOptions(parsedKey));
+  const myIssuesQuery = useQuery(jiraMyOpenIssuesQueryOptions());
 
   const dispatchLink = useCallback(
     (ticket: LinkedJiraTicket) => {
@@ -84,7 +101,7 @@ export function CreateJiraTicketDialog({
       const result = await createMutation.mutateAsync({
         projectKey,
         type: issueType,
-        priority,
+        priority: "Medium",
         summary,
         description,
       });
@@ -98,130 +115,235 @@ export function CreateJiraTicketDialog({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create issue.");
     }
-  }, [projectKey, issueType, priority, summary, description, createMutation, dispatchLink]);
+  }, [projectKey, issueType, summary, description, createMutation, dispatchLink]);
 
   const handleGenerate = useCallback(async () => {
     if (!projectKey) return;
+    setError(null);
     try {
       const result = await generateMutation.mutateAsync({
-        conversationContext: "Current conversation context",
+        threadId: threadId as any,
         projectKey,
       });
       setSummary(result.summary);
       setDescription(result.description);
-    } catch {
-      // Silently fail generation
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate content.");
     }
   }, [projectKey, generateMutation]);
 
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Link Jira Ticket</DialogTitle>
+        <DialogTitle className="flex items-center gap-2">
+          <JiraIcon className="size-5" />
+          Jira Ticket
+        </DialogTitle>
         <DialogDescription>Link an existing ticket or create a new one.</DialogDescription>
       </DialogHeader>
 
-      <div className="flex gap-2 mb-4">
-        <Button
-          variant={mode === "link" ? "default" : "ghost"}
-          size="sm"
-          onClick={() => setMode("link")}
-        >
-          Link Existing
-        </Button>
-        <Button
-          variant={mode === "create" ? "default" : "ghost"}
-          size="sm"
-          onClick={() => setMode("create")}
-        >
-          Create New
-        </Button>
-      </div>
+      <DialogPanel>
+        <div className="flex flex-col gap-4">
+          {/* Mode tabs */}
+          <div className="flex gap-1 rounded-md border border-border/70 bg-muted/30 p-1">
+            <button
+              type="button"
+              className={`flex-1 rounded-sm px-3 py-1.5 text-xs font-medium transition-colors ${
+                mode === "link"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              onClick={() => setMode("link")}
+            >
+              Link Existing
+            </button>
+            <button
+              type="button"
+              className={`flex-1 rounded-sm px-3 py-1.5 text-xs font-medium transition-colors ${
+                mode === "create"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              onClick={() => setMode("create")}
+            >
+              Create New
+            </button>
+          </div>
 
-      {mode === "link" ? (
-        <div className="space-y-3">
-          <Input
-            placeholder="PROJ-123 or Jira URL"
-            value={keyInput}
-            onChange={(e) => setKeyInput(e.target.value)}
-          />
-          {issueQuery.isLoading && (
-            <p className="text-xs text-muted-foreground">Looking up issue...</p>
-          )}
-          {issueQuery.data && (
-            <div className="rounded border p-3 text-sm">
-              <p className="font-medium">
-                {issueQuery.data.key}: {issueQuery.data.summary}
-              </p>
-              <p className="text-muted-foreground text-xs mt-1">
-                {issueQuery.data.type} &middot; {issueQuery.data.status} &middot;{" "}
-                {issueQuery.data.priority}
-              </p>
+          {mode === "link" ? (
+            <div className="flex flex-col gap-3">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="PROJ-123 or Jira URL"
+                  value={keyInput}
+                  onChange={(e) => setKeyInput(e.target.value)}
+                  autoFocus
+                />
+                {issueQuery.isLoading && (
+                  <div className="flex shrink-0 items-center">
+                    <LoaderIcon className="size-3.5 animate-spin text-muted-foreground" />
+                  </div>
+                )}
+              </div>
+
+              {issueQuery.data && (
+                <div className="rounded-lg border border-border/70 bg-muted/50 p-3">
+                  <div className="flex items-start gap-2">
+                    <SearchIcon className="mt-0.5 size-3.5 shrink-0 text-blue-500" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">
+                        {issueQuery.data.key}: {issueQuery.data.summary}
+                      </p>
+                      <p className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>{issueQuery.data.type}</span>
+                        <span>&middot;</span>
+                        <span>{issueQuery.data.status}</span>
+                        <span>&middot;</span>
+                        <span>{issueQuery.data.priority}</span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {issueQuery.isError && (
+                <p className="text-xs text-destructive">Could not find issue.</p>
+              )}
+
+              {!parsedKey && myIssuesQuery.data && myIssuesQuery.data.issues.length > 0 && (
+                <div>
+                  <p className="mb-1.5 text-[11px] uppercase tracking-wide text-muted-foreground/60">
+                    My open tickets
+                  </p>
+                  <div className="max-h-48 overflow-y-auto rounded-md border">
+                    {myIssuesQuery.data.issues.map((issue) => (
+                      <button
+                        key={issue.key}
+                        type="button"
+                        className="flex w-full items-center gap-2 border-b border-border/40 px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-accent/50"
+                        onClick={() => setKeyInput(issue.key)}
+                      >
+                        <JiraIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                        <span className="min-w-0 flex-1 truncate text-xs font-medium">
+                          {issue.key} {issue.summary}
+                        </span>
+                        <span className="shrink-0 text-[10px] text-muted-foreground/60">
+                          {issue.status}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!parsedKey && myIssuesQuery.isLoading && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <LoaderIcon className="size-3 animate-spin" />
+                  Loading your tickets...
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Project Key (e.g. PROJ)"
+                  value={projectKey}
+                  onChange={(e) => setProjectKey(e.target.value.toUpperCase())}
+                  className="flex-1"
+                  autoFocus
+                />
+                <Select value={issueType} onValueChange={(v) => v && setIssueType(v)}>
+                  <SelectTrigger size="sm" className="w-28">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    <SelectItem value="Task">Task</SelectItem>
+                    <SelectItem value="Bug">Bug</SelectItem>
+                    <SelectItem value="Story">Story</SelectItem>
+                    <SelectItem value="Epic">Epic</SelectItem>
+                    <SelectItem value="Sub-task">Sub-task</SelectItem>
+                  </SelectPopup>
+                </Select>
+              </div>
+              <Input
+                placeholder="Summary"
+                value={summary}
+                onChange={(e) => setSummary(e.target.value)}
+              />
+              <Textarea
+                placeholder="Description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={4}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleGenerate}
+                disabled={!projectKey || generateMutation.isPending}
+                className="self-start"
+              >
+                {generateMutation.isPending ? (
+                  <>
+                    <LoaderIcon className="size-3 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <SparklesIcon className="size-3" />
+                    Generate with AI
+                  </>
+                )}
+              </Button>
+              {error && (
+                <div className="rounded-md border border-border/70 bg-muted/30 p-2.5">
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <p className="flex items-center gap-1 text-xs font-medium text-destructive">
+                      <AlertCircleIcon className="size-3" />
+                      Something went wrong
+                    </p>
+                    <button
+                      type="button"
+                      className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      onClick={() => void navigator.clipboard.writeText(error)}
+                      title="Copy error"
+                    >
+                      <ClipboardCopyIcon className="size-3" />
+                    </button>
+                  </div>
+                  <pre className="max-h-24 select-all overflow-auto whitespace-pre-wrap break-all rounded bg-muted/50 p-2 font-mono text-[11px] text-muted-foreground">
+                    {error}
+                  </pre>
+                </div>
+              )}
             </div>
           )}
-          {issueQuery.isError && (
-            <p className="text-xs text-destructive">Could not find issue.</p>
-          )}
         </div>
-      ) : (
-        <div className="space-y-3">
-          <div className="flex gap-2">
-            <Input
-              placeholder="Project Key (e.g. PROJ)"
-              value={projectKey}
-              onChange={(e) => setProjectKey(e.target.value.toUpperCase())}
-              className="flex-1"
-            />
-            <Input
-              placeholder="Type"
-              value={issueType}
-              onChange={(e) => setIssueType(e.target.value)}
-              className="w-24"
-            />
-            <Input
-              placeholder="Priority"
-              value={priority}
-              onChange={(e) => setPriority(e.target.value)}
-              className="w-24"
-            />
-          </div>
-          <Input
-            placeholder="Summary"
-            value={summary}
-            onChange={(e) => setSummary(e.target.value)}
-          />
-          <Textarea
-            placeholder="Description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={4}
-          />
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleGenerate}
-            disabled={!projectKey || generateMutation.isPending}
-          >
-            {generateMutation.isPending ? "Generating..." : "Generate with AI"}
-          </Button>
-          {error && <p className="text-xs text-destructive">{error}</p>}
-        </div>
-      )}
+      </DialogPanel>
 
       <DialogFooter>
-        <Button variant="ghost" onClick={onClose}>
+        <Button variant="ghost" size="sm" onClick={onClose}>
           Cancel
         </Button>
         {mode === "link" ? (
-          <Button onClick={linkExistingTicket} disabled={!issueQuery.data}>
+          <Button size="sm" onClick={linkExistingTicket} disabled={!issueQuery.data}>
             Link Ticket
           </Button>
         ) : (
           <Button
+            size="sm"
             onClick={handleCreate}
             disabled={!projectKey || !summary || createMutation.isPending}
           >
-            {createMutation.isPending ? "Creating..." : "Create & Link"}
+            {createMutation.isPending ? (
+              <>
+                <LoaderIcon className="size-3 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              "Create & Link"
+            )}
           </Button>
         )}
       </DialogFooter>

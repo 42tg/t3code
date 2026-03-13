@@ -1,7 +1,8 @@
 /**
- * JiraCli - Effect service contract for `jira` CLI process interactions.
+ * JiraCli - Effect service contract for Jira REST API interactions.
  *
  * Provides thin command execution helpers used by Jira workflow orchestration.
+ * Backed by direct HTTP calls to the Jira v3 REST API.
  *
  * @module JiraCli
  */
@@ -19,18 +20,19 @@ import type {
   JiraCommentAddResult,
   JiraIssueListInput,
   JiraIssueListResult,
+  JiraListTransitionsInput,
+  JiraListTransitionsResult,
 } from "@t3tools/contracts";
-import type { ProcessRunResult } from "../../processRunner";
 import type { JiraCliError } from "../Errors.ts";
 
 /**
- * JiraCliShape - Service API for executing Jira CLI commands.
+ * JiraCliShape - Service API for Jira REST API operations.
  */
 export interface JiraCliShape {
   readonly execute: (input: {
     readonly args: ReadonlyArray<string>;
     readonly timeoutMs?: number;
-  }) => Effect.Effect<ProcessRunResult, JiraCliError>;
+  }) => Effect.Effect<never, JiraCliError>;
 
   readonly viewIssue: (
     input: JiraIssueViewInput,
@@ -51,10 +53,14 @@ export interface JiraCliShape {
   readonly listIssues: (
     input: JiraIssueListInput,
   ) => Effect.Effect<JiraIssueListResult, JiraCliError>;
+
+  readonly listTransitions: (
+    input: JiraListTransitionsInput,
+  ) => Effect.Effect<JiraListTransitionsResult, JiraCliError>;
 }
 
 /**
- * JiraCli - Service tag for Jira CLI process execution.
+ * JiraCli - Service tag for Jira REST API execution.
  */
 export class JiraCli extends ServiceMap.Service<JiraCli, JiraCliShape>()(
   "t3/jira/Services/JiraCli",

@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { TrimmedNonEmptyString } from "./baseSchemas";
+import { ThreadId, TrimmedNonEmptyString } from "./baseSchemas";
 
 // Domain Types
 
@@ -51,6 +51,12 @@ export type JiraIssueListInput = typeof JiraIssueListInput.Type;
 
 // RPC Results
 
+const JiraCommentEntry = Schema.Struct({
+  author: Schema.String,
+  body: Schema.String,
+  created: Schema.String,
+});
+
 export const JiraIssueViewResult = Schema.Struct({
   key: TrimmedNonEmptyString,
   url: Schema.String,
@@ -59,6 +65,7 @@ export const JiraIssueViewResult = Schema.Struct({
   type: TrimmedNonEmptyString,
   priority: TrimmedNonEmptyString,
   description: Schema.String,
+  comments: Schema.Array(JiraCommentEntry),
 });
 export type JiraIssueViewResult = typeof JiraIssueViewResult.Type;
 
@@ -91,10 +98,27 @@ export const JiraIssueListResult = Schema.Struct({
 });
 export type JiraIssueListResult = typeof JiraIssueListResult.Type;
 
+// Transitions
+
+export const JiraListTransitionsInput = Schema.Struct({
+  key: TrimmedNonEmptyString,
+});
+export type JiraListTransitionsInput = typeof JiraListTransitionsInput.Type;
+
+const JiraTransitionEntry = Schema.Struct({
+  id: Schema.String,
+  name: TrimmedNonEmptyString,
+});
+
+export const JiraListTransitionsResult = Schema.Struct({
+  transitions: Schema.Array(JiraTransitionEntry),
+});
+export type JiraListTransitionsResult = typeof JiraListTransitionsResult.Type;
+
 // Text Generation types
 
 export const JiraGenerateTicketContentInput = Schema.Struct({
-  conversationContext: Schema.String,
+  threadId: ThreadId,
   projectKey: TrimmedNonEmptyString,
 });
 export type JiraGenerateTicketContentInput = typeof JiraGenerateTicketContentInput.Type;
@@ -106,9 +130,9 @@ export const JiraGenerateTicketContentResult = Schema.Struct({
 export type JiraGenerateTicketContentResult = typeof JiraGenerateTicketContentResult.Type;
 
 export const JiraGenerateProgressCommentInput = Schema.Struct({
+  threadId: ThreadId,
   ticketKey: TrimmedNonEmptyString,
   ticketTitle: TrimmedNonEmptyString,
-  recentConversation: Schema.String,
 });
 export type JiraGenerateProgressCommentInput = typeof JiraGenerateProgressCommentInput.Type;
 
@@ -116,15 +140,3 @@ export const JiraGenerateProgressCommentResult = Schema.Struct({
   comment: Schema.String,
 });
 export type JiraGenerateProgressCommentResult = typeof JiraGenerateProgressCommentResult.Type;
-
-export const JiraGenerateCompletionSummaryInput = Schema.Struct({
-  ticketKey: TrimmedNonEmptyString,
-  ticketTitle: TrimmedNonEmptyString,
-  fullConversation: Schema.String,
-});
-export type JiraGenerateCompletionSummaryInput = typeof JiraGenerateCompletionSummaryInput.Type;
-
-export const JiraGenerateCompletionSummaryResult = Schema.Struct({
-  comment: Schema.String,
-});
-export type JiraGenerateCompletionSummaryResult = typeof JiraGenerateCompletionSummaryResult.Type;

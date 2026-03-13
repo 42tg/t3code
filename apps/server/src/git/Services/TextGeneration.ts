@@ -65,20 +65,14 @@ export interface JiraTicketContentGenerationResult {
 export interface JiraProgressCommentGenerationInput {
   ticketKey: string;
   ticketTitle: string;
+  ticketDescription: string;
+  ticketStatus: string;
+  ticketType: string;
+  ticketComments: string;
   recentConversation: string;
 }
 
 export interface JiraProgressCommentGenerationResult {
-  comment: string;
-}
-
-export interface JiraCompletionSummaryGenerationInput {
-  ticketKey: string;
-  ticketTitle: string;
-  fullConversation: string;
-}
-
-export interface JiraCompletionSummaryGenerationResult {
   comment: string;
 }
 
@@ -128,13 +122,6 @@ export interface TextGenerationShape {
   readonly generateJiraProgressComment: (
     input: JiraProgressCommentGenerationInput,
   ) => Effect.Effect<JiraProgressCommentGenerationResult, TextGenerationError>;
-
-  /**
-   * Generate a Jira completion summary from full conversation.
-   */
-  readonly generateJiraCompletionSummary: (
-    input: JiraCompletionSummaryGenerationInput,
-  ) => Effect.Effect<JiraCompletionSummaryGenerationResult, TextGenerationError>;
 }
 
 /**

@@ -73,11 +73,6 @@ interface FakeGitTextGeneration {
     ticketTitle: string;
     recentConversation: string;
   }) => Effect.Effect<{ comment: string }, TextGenerationError>;
-  generateJiraCompletionSummary?: (input: {
-    ticketKey: string;
-    ticketTitle: string;
-    fullConversation: string;
-  }) => Effect.Effect<{ comment: string }, TextGenerationError>;
 }
 
 type FakePullRequest = NonNullable<FakeGhScenario["pullRequest"]>;
@@ -190,10 +185,6 @@ function createTextGeneration(overrides: Partial<FakeGitTextGeneration> = {}): T
       Effect.succeed({
         comment: "Mock progress",
       }),
-    generateJiraCompletionSummary: () =>
-      Effect.succeed({
-        comment: "Mock completion",
-      }),
     ...overrides,
   };
 
@@ -232,7 +223,10 @@ function createTextGeneration(overrides: Partial<FakeGitTextGeneration> = {}): T
         ),
       ),
     generateJiraTicketContent: (input) =>
-      (implementation.generateJiraTicketContent ?? (() => Effect.succeed({ summary: "Mock summary", description: "Mock description" })))(input).pipe(
+      (
+        implementation.generateJiraTicketContent ??
+        (() => Effect.succeed({ summary: "Mock summary", description: "Mock description" }))
+      )(input).pipe(
         Effect.mapError(
           (cause) =>
             new TextGenerationError({
@@ -243,22 +237,14 @@ function createTextGeneration(overrides: Partial<FakeGitTextGeneration> = {}): T
         ),
       ),
     generateJiraProgressComment: (input) =>
-      (implementation.generateJiraProgressComment ?? (() => Effect.succeed({ comment: "Mock progress" })))(input).pipe(
+      (
+        implementation.generateJiraProgressComment ??
+        (() => Effect.succeed({ comment: "Mock progress" }))
+      )(input).pipe(
         Effect.mapError(
           (cause) =>
             new TextGenerationError({
               operation: "generateJiraProgressComment",
-              detail: "fake text generation failed",
-              ...(cause !== undefined ? { cause } : {}),
-            }),
-        ),
-      ),
-    generateJiraCompletionSummary: (input) =>
-      (implementation.generateJiraCompletionSummary ?? (() => Effect.succeed({ comment: "Mock completion" })))(input).pipe(
-        Effect.mapError(
-          (cause) =>
-            new TextGenerationError({
-              operation: "generateJiraCompletionSummary",
               detail: "fake text generation failed",
               ...(cause !== undefined ? { cause } : {}),
             }),

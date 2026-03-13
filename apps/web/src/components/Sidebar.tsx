@@ -3,7 +3,6 @@ import {
   ChevronRightIcon,
   FolderIcon,
   GitPullRequestIcon,
-  TicketIcon,
   PlusIcon,
   RocketIcon,
   SettingsIcon,
@@ -11,7 +10,7 @@ import {
   TerminalIcon,
   TriangleAlertIcon,
 } from "lucide-react";
-import { ClaudeAI, CursorIcon, OpenAI } from "./Icons";
+import { ClaudeAI, CursorIcon, JiraIcon, OpenAI } from "./Icons";
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import {
   DndContext,
@@ -1650,9 +1649,7 @@ export default function Sidebar() {
                                 const prStatus = prStatusIndicator(
                                   prByThreadId.get(thread.id) ?? null,
                                 );
-                                const jiraStatus = jiraStatusIndicator(
-                                  thread.linkedJiraTicket,
-                                );
+                                const jiraStatus = jiraStatusIndicator(thread.linkedJiraTicket);
                                 const terminalStatus = terminalStatusFromRunningIds(
                                   selectThreadTerminalState(terminalStateByThreadId, thread.id)
                                     .runningTerminalIds,
@@ -1745,7 +1742,7 @@ export default function Sidebar() {
                                                   aria-label={jiraStatus.tooltip}
                                                   className={`inline-flex items-center justify-center ${jiraStatus.colorClass}`}
                                                 >
-                                                  <TicketIcon className="size-3" />
+                                                  <JiraIcon className="size-3" />
                                                 </span>
                                               }
                                             />

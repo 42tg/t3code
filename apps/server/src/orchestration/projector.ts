@@ -298,7 +298,9 @@ export function projectEvent(
             ...(payload.model !== undefined ? { model: payload.model } : {}),
             ...(payload.branch !== undefined ? { branch: payload.branch } : {}),
             ...(payload.worktreePath !== undefined ? { worktreePath: payload.worktreePath } : {}),
-            ...(payload.linkedJiraTicket !== undefined ? { linkedJiraTicket: payload.linkedJiraTicket } : {}),
+            ...(payload.linkedJiraTicket !== undefined
+              ? { linkedJiraTicket: payload.linkedJiraTicket }
+              : {}),
             updatedAt: payload.updatedAt,
           }),
         })),

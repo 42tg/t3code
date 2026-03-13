@@ -62,12 +62,12 @@ import type {
   JiraCommentAddResult,
   JiraIssueListInput,
   JiraIssueListResult,
+  JiraListTransitionsInput,
+  JiraListTransitionsResult,
   JiraGenerateTicketContentInput,
   JiraGenerateTicketContentResult,
   JiraGenerateProgressCommentInput,
   JiraGenerateProgressCommentResult,
-  JiraGenerateCompletionSummaryInput,
-  JiraGenerateCompletionSummaryResult,
 } from "./jira";
 import { EditorId, type OpenInWarpInput } from "./editor";
 
@@ -181,14 +181,19 @@ export interface NativeApi {
     listOpenPrs: (input: GitListOpenPrsInput) => Promise<GitListOpenPrsResult>;
   };
   jira: {
+    isConfigured: () => Promise<{ configured: boolean }>;
     viewIssue: (input: JiraIssueViewInput) => Promise<JiraIssueViewResult>;
     createIssue: (input: JiraIssueCreateInput) => Promise<JiraIssueCreateResult>;
     moveIssue: (input: JiraIssueMoveInput) => Promise<JiraIssueMoveResult>;
     addComment: (input: JiraCommentAddInput) => Promise<JiraCommentAddResult>;
     listIssues: (input: JiraIssueListInput) => Promise<JiraIssueListResult>;
-    generateTicketContent: (input: JiraGenerateTicketContentInput) => Promise<JiraGenerateTicketContentResult>;
-    generateProgressComment: (input: JiraGenerateProgressCommentInput) => Promise<JiraGenerateProgressCommentResult>;
-    generateCompletionSummary: (input: JiraGenerateCompletionSummaryInput) => Promise<JiraGenerateCompletionSummaryResult>;
+    listTransitions: (input: JiraListTransitionsInput) => Promise<JiraListTransitionsResult>;
+    generateTicketContent: (
+      input: JiraGenerateTicketContentInput,
+    ) => Promise<JiraGenerateTicketContentResult>;
+    generateProgressComment: (
+      input: JiraGenerateProgressCommentInput,
+    ) => Promise<JiraGenerateProgressCommentResult>;
   };
   contextMenu: {
     show: <T extends string>(

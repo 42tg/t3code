@@ -8,7 +8,6 @@ import {
   jiraAddCommentMutationOptions,
   jiraGenerateTicketContentMutationOptions,
   jiraGenerateProgressCommentMutationOptions,
-  jiraGenerateCompletionSummaryMutationOptions,
   jiraViewIssueQueryOptions,
   jiraListIssuesQueryOptions,
 } from "./jiraReactQuery";
@@ -90,10 +89,5 @@ describe("jira mutation options", () => {
   it("attaches mutation key for generateProgressComment", () => {
     const options = jiraGenerateProgressCommentMutationOptions();
     expect(options.mutationKey).toEqual(jiraMutationKeys.generateProgressComment);
-  });
-
-  it("attaches mutation key for generateCompletionSummary", () => {
-    const options = jiraGenerateCompletionSummaryMutationOptions();
-    expect(options.mutationKey).toEqual(jiraMutationKeys.generateCompletionSummary);
   });
 });
