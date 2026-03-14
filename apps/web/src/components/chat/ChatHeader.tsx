@@ -58,8 +58,8 @@ export const ChatHeader = memo(function ChatHeader({
   onToggleDiff,
 }: ChatHeaderProps) {
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-2">
-      <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden sm:gap-3">
+    <div className="flex min-w-0 flex-1 flex-col gap-1 md:flex-row md:items-center md:gap-2">
+      <div className="flex min-w-0 items-center gap-2 md:flex-1 md:gap-3">
         <SidebarTrigger className="size-7 shrink-0 md:hidden" />
         <h2
           className="min-w-0 shrink truncate text-sm font-medium text-foreground"
@@ -68,7 +68,7 @@ export const ChatHeader = memo(function ChatHeader({
           {activeThreadTitle}
         </h2>
         {activeProjectName && (
-          <Badge variant="outline" className="min-w-0 shrink truncate">
+          <Badge variant="outline" className="hidden min-w-0 shrink truncate md:inline-flex">
             {activeProjectName}
           </Badge>
         )}
@@ -78,7 +78,7 @@ export const ChatHeader = memo(function ChatHeader({
           </Badge>
         )}
       </div>
-      <div className="@container/header-actions flex min-w-0 flex-1 items-center justify-end gap-2 @sm/header-actions:gap-3">
+      <div className="@container/header-actions flex min-w-0 flex-1 items-center justify-end gap-1 @sm/header-actions:gap-2">
         {activeProjectScripts && (
           <ProjectScriptsControl
             scripts={activeProjectScripts}
