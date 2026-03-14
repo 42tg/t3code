@@ -3320,6 +3320,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
           gitCwd={gitCwd}
           diffOpen={diffOpen}
           linkedJiraTicket={activeThread.linkedJiraTicket}
+          sessionProvider={activeThread.session?.provider ?? null}
+          providerSessionId={activeThread.session?.providerSessionId ?? null}
           onRunProjectScript={(script) => {
             void runProjectScript(script);
           }}

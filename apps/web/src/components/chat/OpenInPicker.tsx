@@ -2,7 +2,7 @@ import { EditorId, type ResolvedKeybindingsConfig } from "@t3tools/contracts";
 import { memo, useCallback, useEffect, useMemo } from "react";
 import { isOpenFavoriteEditorShortcut, shortcutLabelForCommand } from "../../keybindings";
 import { usePreferredEditor } from "../../editorPreferences";
-import { ChevronDownIcon, FolderClosedIcon } from "lucide-react";
+import { ChevronDownIcon, FolderClosedIcon, TerminalIcon } from "lucide-react";
 import { Button } from "../ui/button";
 import { Group, GroupSeparator } from "../ui/group";
 import { Menu, MenuItem, MenuPopup, MenuShortcut, MenuTrigger } from "../ui/menu";
@@ -49,10 +49,14 @@ export const OpenInPicker = memo(function OpenInPicker({
   keybindings,
   availableEditors,
   openInCwd,
+  sessionProvider,
+  providerSessionId,
 }: {
   keybindings: ResolvedKeybindingsConfig;
   availableEditors: ReadonlyArray<EditorId>;
   openInCwd: string | null;
+  sessionProvider?: string | null;
+  providerSessionId?: string | null;
 }) {
   const [preferredEditor, setPreferredEditor] = usePreferredEditor(availableEditors);
   const options = useMemo(
@@ -121,6 +125,21 @@ export const OpenInPicker = memo(function OpenInPicker({
               )}
             </MenuItem>
           ))}
+          {sessionProvider === "claudeCode" && openInCwd && (
+            <MenuItem
+              onClick={() => {
+                const api = readNativeApi();
+                if (!api || !openInCwd) return;
+                void api.shell.openInWarp({
+                  cwd: openInCwd,
+                  ...(providerSessionId ? { sessionId: providerSessionId } : {}),
+                });
+              }}
+            >
+              <TerminalIcon aria-hidden="true" className="text-muted-foreground" />
+              {providerSessionId ? "Resume in Warp" : "Open in Warp"}
+            </MenuItem>
+          )}
         </MenuPopup>
       </Menu>
     </Group>
