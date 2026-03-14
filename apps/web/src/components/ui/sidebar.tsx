@@ -85,6 +85,76 @@ function useSidebar() {
   return context;
 }
 
+const SWIPE_THRESHOLD = 80;
+
+function SwipeToDismiss({
+  children,
+  onDismiss,
+  side,
+}: {
+  children: React.ReactNode;
+  onDismiss: () => void;
+  side: "left" | "right";
+}) {
+  const touchStartRef = React.useRef<{ x: number; y: number } | null>(null);
+  const swipingRef = React.useRef(false);
+
+  const handleTouchStart = React.useCallback((e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    if (!touch) return;
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+    swipingRef.current = false;
+  }, []);
+
+  const handleTouchMove = React.useCallback(
+    (e: React.TouchEvent) => {
+      const touch = e.touches[0];
+      const start = touchStartRef.current;
+      if (!touch || !start) return;
+
+      const dx = touch.clientX - start.x;
+      const dy = touch.clientY - start.y;
+
+      // Only treat as a horizontal swipe if horizontal movement exceeds vertical
+      if (!swipingRef.current && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+        swipingRef.current = true;
+      }
+    },
+    [],
+  );
+
+  const handleTouchEnd = React.useCallback(
+    (e: React.TouchEvent) => {
+      const touch = e.changedTouches[0];
+      const start = touchStartRef.current;
+      touchStartRef.current = null;
+
+      if (!touch || !start || !swipingRef.current) return;
+
+      const dx = touch.clientX - start.x;
+      // Sidebar opens from left → swipe left (negative dx) to close
+      // Sidebar opens from right → swipe right (positive dx) to close
+      const shouldDismiss = side === "left" ? dx < -SWIPE_THRESHOLD : dx > SWIPE_THRESHOLD;
+
+      if (shouldDismiss) {
+        onDismiss();
+      }
+    },
+    [onDismiss, side],
+  );
+
+  return (
+    <div
+      className="h-full w-full"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      {children}
+    </div>
+  );
+}
+
 function SidebarProvider({
   defaultOpen = true,
   open: openProp,
@@ -245,7 +315,9 @@ function Sidebar({
               <SheetTitle>Sidebar</SheetTitle>
               <SheetDescription>Displays the mobile sidebar.</SheetDescription>
             </SheetHeader>
-            <div className="flex h-full w-full flex-col">{children}</div>
+            <SwipeToDismiss onDismiss={() => setOpenMobile(false)} side={side}>
+              <div className="flex h-full w-full flex-col">{children}</div>
+            </SwipeToDismiss>
           </SheetPopup>
         </Sheet>
       </SidebarInstanceContext.Provider>
@@ -656,7 +728,55 @@ function SidebarRail({
   );
 }
 
+const SWIPE_OPEN_EDGE_PX = 80;
+
 function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
+  const { isMobile, setOpenMobile } = useSidebar();
+
+  const touchStartRef = React.useRef<{ x: number; y: number } | null>(null);
+  const swipingRef = React.useRef(false);
+
+  const handleTouchStart = React.useCallback(
+    (e: React.TouchEvent) => {
+      if (!isMobile) return;
+      const touch = e.touches[0];
+      if (!touch) return;
+      // Only start tracking if the touch begins near the left edge
+      if (touch.clientX > SWIPE_OPEN_EDGE_PX) return;
+      touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+      swipingRef.current = false;
+    },
+    [isMobile],
+  );
+
+  const handleTouchMove = React.useCallback(
+    (e: React.TouchEvent) => {
+      const touch = e.touches[0];
+      const start = touchStartRef.current;
+      if (!touch || !start) return;
+      const dx = touch.clientX - start.x;
+      const dy = touch.clientY - start.y;
+      if (!swipingRef.current && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+        swipingRef.current = true;
+      }
+    },
+    [],
+  );
+
+  const handleTouchEnd = React.useCallback(
+    (e: React.TouchEvent) => {
+      const touch = e.changedTouches[0];
+      const start = touchStartRef.current;
+      touchStartRef.current = null;
+      if (!touch || !start || !swipingRef.current) return;
+      const dx = touch.clientX - start.x;
+      if (dx > SWIPE_THRESHOLD) {
+        setOpenMobile(true);
+      }
+    },
+    [setOpenMobile],
+  );
+
   return (
     <main
       className={cn(
@@ -665,6 +785,9 @@ function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
         className,
       )}
       data-slot="sidebar-inset"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
       {...props}
     />
   );

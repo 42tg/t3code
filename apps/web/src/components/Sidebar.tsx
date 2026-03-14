@@ -73,7 +73,6 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarHeader,
-  SidebarMenuAction,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -278,6 +277,96 @@ function ProjectFavicon({ cwd }: { cwd: string }) {
       onLoad={() => setStatus("loaded")}
       onError={() => setStatus("error")}
     />
+  );
+}
+
+function ProjectActionButtons({
+  project,
+  githubUrl,
+  isMobile,
+  newThreadShortcutLabel,
+  onOpenGitHub,
+  onReviewPr,
+  onNewThread,
+}: {
+  project: { id: ProjectId; name: string };
+  githubUrl: string | undefined;
+  isMobile: boolean;
+  newThreadShortcutLabel: string | null;
+  onOpenGitHub: (url: string) => void;
+  onReviewPr: () => void;
+  onNewThread: () => void;
+}) {
+  const buttonClass = isMobile
+    ? "inline-flex size-7 items-center justify-center rounded-md p-0 text-muted-foreground/70 active:bg-secondary active:text-foreground"
+    : "inline-flex size-5 items-center justify-center rounded-md p-0 text-muted-foreground/70 hover:bg-secondary hover:text-foreground";
+  const iconClass = isMobile ? "size-4" : "size-3.5";
+
+  return (
+    <>
+      {githubUrl && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                aria-label={`Open ${project.name} on GitHub`}
+                className={buttonClass}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onOpenGitHub(githubUrl);
+                }}
+              >
+                <GitHubIcon className={iconClass} />
+              </button>
+            }
+          />
+          <TooltipPopup side="top">Open on GitHub</TooltipPopup>
+        </Tooltip>
+      )}
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <button
+              type="button"
+              aria-label={`Review PR in ${project.name}`}
+              className={buttonClass}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onReviewPr();
+              }}
+            >
+              <GitPullRequestIcon className={iconClass} />
+            </button>
+          }
+        />
+        <TooltipPopup side="top">Review PR</TooltipPopup>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <button
+              type="button"
+              aria-label={`Create new thread in ${project.name}`}
+              data-testid="new-thread-button"
+              className={buttonClass}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onNewThread();
+              }}
+            >
+              <SquarePenIcon className={iconClass} />
+            </button>
+          }
+        />
+        <TooltipPopup side="top">
+          {newThreadShortcutLabel ? `New thread (${newThreadShortcutLabel})` : "New thread"}
+        </TooltipPopup>
+      </Tooltip>
+    </>
   );
 }
 
@@ -1470,10 +1559,10 @@ export default function Sidebar() {
                     <SortableProjectItem key={project.id} projectId={project.id}>
                       {(dragHandleProps) => (
                         <Collapsible className="group/collapsible" open={project.expanded}>
-                          <div className="group/project-header relative">
+                          <div className={`group/project-header relative ${isMobile ? "flex items-center" : ""}`}>
                             <SidebarMenuButton
                               size="sm"
-                              className="gap-2 px-2 py-1.5 text-left cursor-grab active:cursor-grabbing hover:bg-accent group-hover/project-header:bg-accent group-hover/project-header:text-sidebar-accent-foreground"
+                              className={`gap-2 px-2 py-1.5 text-left cursor-grab active:cursor-grabbing hover:bg-accent group-hover/project-header:bg-accent group-hover/project-header:text-sidebar-accent-foreground ${isMobile ? "min-w-0 flex-1" : ""}`}
                               {...dragHandleProps.attributes}
                               {...dragHandleProps.listeners}
                               onPointerDownCapture={handleProjectTitlePointerDownCapture}
@@ -1497,88 +1586,50 @@ export default function Sidebar() {
                                 {project.name}
                               </span>
                             </SidebarMenuButton>
-                            <div className="absolute top-1 right-1 flex items-center gap-0.5 opacity-0 group-hover/project-header:opacity-100 transition-opacity">
-                              {githubUrlByProjectId.has(project.id) && (
-                                <Tooltip>
-                                  <TooltipTrigger
-                                    render={
-                                      <button
-                                        type="button"
-                                        aria-label={`Open ${project.name} on GitHub`}
-                                        className="inline-flex size-5 items-center justify-center rounded-md p-0 text-muted-foreground/70 hover:bg-secondary hover:text-foreground"
-                                        onClick={(event) => {
-                                          event.preventDefault();
-                                          event.stopPropagation();
-                                          const url = githubUrlByProjectId.get(project.id);
-                                          if (!url) return;
-                                          const api = readNativeApi();
-                                          if (api) {
-                                            void api.shell.openExternal(url);
-                                          }
-                                        }}
-                                      >
-                                        <GitHubIcon className="size-3.5" />
-                                      </button>
-                                    }
-                                  />
-                                  <TooltipPopup side="top">Open on GitHub</TooltipPopup>
-                                </Tooltip>
-                              )}
-                              <Tooltip>
-                                <TooltipTrigger
-                                  render={
-                                    <button
-                                      type="button"
-                                      aria-label={`Review PR in ${project.name}`}
-                                      className="inline-flex size-5 items-center justify-center rounded-md p-0 text-muted-foreground/70 hover:bg-secondary hover:text-foreground"
-                                      onClick={(event) => {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        setReviewPrProjectId(project.id);
-                                      }}
-                                    >
-                                      <GitPullRequestIcon className="size-3.5" />
-                                    </button>
-                                  }
+                            {isMobile ? (
+                              <div className="flex shrink-0 items-center gap-0.5 pr-1">
+                                <ProjectActionButtons
+                                  project={project}
+                                  githubUrl={githubUrlByProjectId.get(project.id)}
+                                  isMobile
+                                  newThreadShortcutLabel={newThreadShortcutLabel}
+                                  onOpenGitHub={(url) => {
+                                    const api = readNativeApi();
+                                    if (api) void api.shell.openExternal(url);
+                                  }}
+                                  onReviewPr={() => setReviewPrProjectId(project.id)}
+                                  onNewThread={() => {
+                                    setOpenMobile(false);
+                                    void handleNewThread(project.id, {
+                                      envMode: resolveSidebarNewThreadEnvMode({
+                                        defaultEnvMode: appSettings.defaultThreadEnvMode,
+                                      }),
+                                    });
+                                  }}
                                 />
-                                <TooltipPopup side="top">Review PR</TooltipPopup>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger
-                                  render={
-                                    <SidebarMenuAction
-                                      render={
-                                        <button
-                                          type="button"
-                                          aria-label={`Create new thread in ${project.name}`}
-                                          data-testid="new-thread-button"
-                                        />
-                                      }
-                                      className="static size-5 rounded-md p-0 text-muted-foreground/70 hover:bg-secondary hover:text-foreground"
-                                      onClick={(event) => {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        if (isMobile) {
-                                          setOpenMobile(false);
-                                        }
-                                        void handleNewThread(project.id, {
-                                          envMode: resolveSidebarNewThreadEnvMode({
-                                            defaultEnvMode: appSettings.defaultThreadEnvMode,
-                                          }),
-                                        });
-                                      }}
-                                    >
-                                      <SquarePenIcon className="size-3.5" />
-                                    </SidebarMenuAction>
-                                  }
+                              </div>
+                            ) : (
+                              <div className="absolute top-1 right-1 flex items-center gap-0.5 opacity-0 transition-opacity group-hover/project-header:opacity-100">
+                                <ProjectActionButtons
+                                  project={project}
+                                  githubUrl={githubUrlByProjectId.get(project.id)}
+                                  isMobile={false}
+                                  newThreadShortcutLabel={newThreadShortcutLabel}
+                                  onOpenGitHub={(url) => {
+                                    const api = readNativeApi();
+                                    if (api) void api.shell.openExternal(url);
+                                  }}
+                                  onReviewPr={() => setReviewPrProjectId(project.id)}
+                                  onNewThread={() => {
+                                    void handleNewThread(project.id, {
+                                      envMode: resolveSidebarNewThreadEnvMode({
+                                        defaultEnvMode: appSettings.defaultThreadEnvMode,
+                                      }),
+                                    });
+                                  }}
                                 />
-                                <TooltipPopup side="top">
-                                  {newThreadShortcutLabel
-                                    ? `New thread (${newThreadShortcutLabel})`
-                                    : "New thread"}
-                                </TooltipPopup>
-                              </Tooltip>
-                            </div>
+                              </div>
+                            )}
                           </div>
 
                           <CollapsibleContent keepMounted>
