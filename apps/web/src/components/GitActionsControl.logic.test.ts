@@ -23,6 +23,7 @@ function status(overrides: Partial<GitStatusResult> = {}): GitStatusResult {
     aheadCount: 0,
     behindCount: 0,
     pr: null,
+    originUrl: null,
     ...overrides,
   };
 }

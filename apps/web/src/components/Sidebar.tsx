@@ -1,6 +1,7 @@
 import {
   ArrowLeftIcon,
   ChevronRightIcon,
+  ExternalLinkIcon,
   FolderIcon,
   GitPullRequestIcon,
   PlusIcon,
@@ -10,7 +11,7 @@ import {
   TerminalIcon,
   TriangleAlertIcon,
 } from "lucide-react";
-import { ClaudeAI, CursorIcon, JiraIcon, OpenAI } from "./Icons";
+import { ClaudeAI, CursorIcon, GitHubIcon, JiraIcon, OpenAI } from "./Icons";
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import {
   DndContext,
@@ -110,6 +111,17 @@ async function copyTextToClipboard(text: string): Promise<void> {
     throw new Error("Clipboard API unavailable.");
   }
   await navigator.clipboard.writeText(text);
+}
+
+function gitRemoteOriginToGitHubUrl(originUrl: string | null): string | null {
+  if (!originUrl) return null;
+  const trimmed = originUrl.trim();
+  const match =
+    /^(?:git@github\.com:|ssh:\/\/git@github\.com\/|https:\/\/github\.com\/|git:\/\/github\.com\/)([^/\s]+\/[^/\s]+?)(?:\.git)?\/?$/i.exec(
+      trimmed,
+    );
+  const nameWithOwner = match?.[1]?.trim();
+  return nameWithOwner ? `https://github.com/${nameWithOwner}` : null;
 }
 
 function formatRelativeTime(iso: string): string {
@@ -410,6 +422,26 @@ export default function Sidebar() {
     }
     return map;
   }, [threadGitStatusCwds, threadGitStatusQueries, threadGitTargets]);
+
+  const projectCwds = useMemo(() => projects.map((p) => p.cwd), [projects]);
+  const projectGitStatusQueries = useQueries({
+    queries: projectCwds.map((cwd) => ({
+      ...gitStatusQueryOptions(cwd),
+      staleTime: 60_000,
+      refetchInterval: 120_000,
+    })),
+  });
+  const githubUrlByProjectId = useMemo(() => {
+    const map = new Map<ProjectId, string>();
+    for (let i = 0; i < projects.length; i += 1) {
+      const project = projects[i];
+      const status = projectGitStatusQueries[i]?.data;
+      if (!project || !status) continue;
+      const url = gitRemoteOriginToGitHubUrl(status.originUrl);
+      if (url) map.set(project.id, url);
+    }
+    return map;
+  }, [projects, projectGitStatusQueries]);
 
   const openPrLink = useCallback((event: React.MouseEvent<HTMLElement>, prUrl: string) => {
     event.preventDefault();
@@ -1466,6 +1498,32 @@ export default function Sidebar() {
                               </span>
                             </SidebarMenuButton>
                             <div className="absolute top-1 right-1 flex items-center gap-0.5 opacity-0 group-hover/project-header:opacity-100 transition-opacity">
+                              {githubUrlByProjectId.has(project.id) && (
+                                <Tooltip>
+                                  <TooltipTrigger
+                                    render={
+                                      <button
+                                        type="button"
+                                        aria-label={`Open ${project.name} on GitHub`}
+                                        className="inline-flex size-5 items-center justify-center rounded-md p-0 text-muted-foreground/70 hover:bg-secondary hover:text-foreground"
+                                        onClick={(event) => {
+                                          event.preventDefault();
+                                          event.stopPropagation();
+                                          const url = githubUrlByProjectId.get(project.id);
+                                          if (!url) return;
+                                          const api = readNativeApi();
+                                          if (api) {
+                                            void api.shell.openExternal(url);
+                                          }
+                                        }}
+                                      >
+                                        <GitHubIcon className="size-3.5" />
+                                      </button>
+                                    }
+                                  />
+                                  <TooltipPopup side="top">Open on GitHub</TooltipPopup>
+                                </Tooltip>
+                              )}
                               <Tooltip>
                                 <TooltipTrigger
                                   render={
@@ -1500,6 +1558,9 @@ export default function Sidebar() {
                                       onClick={(event) => {
                                         event.preventDefault();
                                         event.stopPropagation();
+                                        if (isMobile) {
+                                          setOpenMobile(false);
+                                        }
                                         void handleNewThread(project.id, {
                                           envMode: resolveSidebarNewThreadEnvMode({
                                             defaultEnvMode: appSettings.defaultThreadEnvMode,

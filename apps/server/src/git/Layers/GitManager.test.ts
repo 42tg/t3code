@@ -778,6 +778,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
         aheadCount: 0,
         behindCount: 0,
         pr: null,
+        originUrl: null,
       });
     }),
   );

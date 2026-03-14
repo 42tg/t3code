@@ -128,6 +128,7 @@ function emptyGitStatus() {
     },
     hasUpstream: false,
     aheadCount: 0,
+    originUrl: null,
     behindCount: 0,
     pr: null,
   } as const;
@@ -852,6 +853,8 @@ export const makeGitManager = Effect.gen(function* () {
           )
         : null;
 
+    const originUrl = yield* readConfigValueNullable(input.cwd, "remote.origin.url");
+
     return {
       branch: details.branch,
       hasWorkingTreeChanges: details.hasWorkingTreeChanges,
@@ -860,6 +863,7 @@ export const makeGitManager = Effect.gen(function* () {
       aheadCount: details.aheadCount,
       behindCount: details.behindCount,
       pr,
+      originUrl,
     };
   });
 

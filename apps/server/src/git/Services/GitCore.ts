@@ -26,7 +26,7 @@ import type {
 
 import type { GitCommandError } from "../Errors.ts";
 
-export interface GitStatusDetails extends Omit<GitStatusResult, "pr"> {
+export interface GitStatusDetails extends Omit<GitStatusResult, "pr" | "originUrl"> {
   upstreamRef: string | null;
 }
 

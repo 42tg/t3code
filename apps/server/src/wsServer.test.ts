@@ -1687,6 +1687,7 @@ describe("WebSocket Server", () => {
       aheadCount: 0,
       behindCount: 0,
       pr: null,
+      originUrl: null,
     };
 
     const status = vi.fn(() => Effect.succeed(statusResult));

@@ -763,6 +763,7 @@ const makeGitCore = Effect.gen(function* () {
         aheadCount: details.aheadCount,
         behindCount: details.behindCount,
         pr: null,
+        originUrl: null,
       })),
     );
 
