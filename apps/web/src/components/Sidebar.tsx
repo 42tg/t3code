@@ -1559,7 +1559,9 @@ export default function Sidebar() {
                     <SortableProjectItem key={project.id} projectId={project.id}>
                       {(dragHandleProps) => (
                         <Collapsible className="group/collapsible" open={project.expanded}>
-                          <div className={`group/project-header relative ${isMobile ? "flex items-center" : ""}`}>
+                          <div
+                            className={`group/project-header relative ${isMobile ? "flex items-center" : ""}`}
+                          >
                             <SidebarMenuButton
                               size="sm"
                               className={`gap-2 px-2 py-1.5 text-left cursor-grab active:cursor-grabbing hover:bg-accent group-hover/project-header:bg-accent group-hover/project-header:text-sidebar-accent-foreground ${isMobile ? "min-w-0 flex-1" : ""}`}

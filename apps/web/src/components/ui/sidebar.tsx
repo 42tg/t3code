@@ -106,22 +106,19 @@ function SwipeToDismiss({
     swipingRef.current = false;
   }, []);
 
-  const handleTouchMove = React.useCallback(
-    (e: React.TouchEvent) => {
-      const touch = e.touches[0];
-      const start = touchStartRef.current;
-      if (!touch || !start) return;
+  const handleTouchMove = React.useCallback((e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    const start = touchStartRef.current;
+    if (!touch || !start) return;
 
-      const dx = touch.clientX - start.x;
-      const dy = touch.clientY - start.y;
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
 
-      // Only treat as a horizontal swipe if horizontal movement exceeds vertical
-      if (!swipingRef.current && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
-        swipingRef.current = true;
-      }
-    },
-    [],
-  );
+    // Only treat as a horizontal swipe if horizontal movement exceeds vertical
+    if (!swipingRef.current && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+      swipingRef.current = true;
+    }
+  }, []);
 
   const handleTouchEnd = React.useCallback(
     (e: React.TouchEvent) => {
@@ -749,19 +746,16 @@ function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
     [isMobile],
   );
 
-  const handleTouchMove = React.useCallback(
-    (e: React.TouchEvent) => {
-      const touch = e.touches[0];
-      const start = touchStartRef.current;
-      if (!touch || !start) return;
-      const dx = touch.clientX - start.x;
-      const dy = touch.clientY - start.y;
-      if (!swipingRef.current && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
-        swipingRef.current = true;
-      }
-    },
-    [],
-  );
+  const handleTouchMove = React.useCallback((e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    const start = touchStartRef.current;
+    if (!touch || !start) return;
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (!swipingRef.current && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+      swipingRef.current = true;
+    }
+  }, []);
 
   const handleTouchEnd = React.useCallback(
     (e: React.TouchEvent) => {
