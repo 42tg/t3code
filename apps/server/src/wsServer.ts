@@ -881,6 +881,11 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         return yield* git.diffBranch(body);
       }
 
+      case WS_METHODS.gitDiffWorkingTree: {
+        const body = stripRequestTag(request.body);
+        return yield* git.diffWorkingTree(body);
+      }
+
       case WS_METHODS.gitCreateWorktree: {
         const body = stripRequestTag(request.body);
         return yield* git.createWorktree(body);

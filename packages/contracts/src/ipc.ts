@@ -8,6 +8,7 @@ import type {
   GitCreateWorktreeResult,
   GitDiffBranchInput,
   GitDiffBranchResult,
+  GitDiffWorkingTreeInput,
   GitFetchPrDetailsInput,
   GitFetchPrDetailsResult,
   GitInitInput,
@@ -176,6 +177,7 @@ export interface NativeApi {
     runStackedAction: (input: GitRunStackedActionInput) => Promise<GitRunStackedActionResult>;
     // Diff API
     diffBranch: (input: GitDiffBranchInput) => Promise<GitDiffBranchResult>;
+    diffWorkingTree: (input: GitDiffWorkingTreeInput) => Promise<GitDiffBranchResult>;
     // GitHub PR API
     fetchPrDetails: (input: GitFetchPrDetailsInput) => Promise<GitFetchPrDetailsResult>;
     listOpenPrs: (input: GitListOpenPrsInput) => Promise<GitListOpenPrsResult>;

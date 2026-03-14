@@ -1427,6 +1427,11 @@ const makeGitCore = Effect.gen(function* () {
       Effect.map((stdout) => ({ diff: stdout })),
     );
 
+  const diffWorkingTree: GitCoreShape["diffWorkingTree"] = (input) =>
+    runGitStdout("GitCore.diffWorkingTree", input.cwd, ["diff", "HEAD"], true).pipe(
+      Effect.map((stdout) => ({ diff: stdout })),
+    );
+
   return {
     status,
     statusDetails,
@@ -1449,6 +1454,7 @@ const makeGitCore = Effect.gen(function* () {
     initRepo,
     listLocalBranchNames,
     diffBranch,
+    diffWorkingTree,
   } satisfies GitCoreShape;
 });
 

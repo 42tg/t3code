@@ -13,6 +13,7 @@ export const gitQueryKeys = {
   branches: (cwd: string | null) => ["git", "branches", cwd] as const,
   diffBranch: (cwd: string | null, base: string | null) =>
     ["git", "diffBranch", cwd, base] as const,
+  diffWorkingTree: (cwd: string | null) => ["git", "diffWorkingTree", cwd] as const,
 };
 
 export const gitMutationKeys = {
@@ -70,6 +71,20 @@ export function gitDiffBranchQueryOptions(input: { cwd: string | null; base: str
     },
     enabled: input.cwd !== null && input.base !== null,
     staleTime: 10_000,
+    refetchOnWindowFocus: "always",
+  });
+}
+
+export function gitDiffWorkingTreeQueryOptions(cwd: string | null) {
+  return queryOptions({
+    queryKey: gitQueryKeys.diffWorkingTree(cwd),
+    queryFn: async () => {
+      const api = ensureNativeApi();
+      if (!cwd) throw new Error("Git working tree diff is unavailable.");
+      return api.git.diffWorkingTree({ cwd });
+    },
+    enabled: cwd !== null,
+    staleTime: 5_000,
     refetchOnWindowFocus: "always",
   });
 }

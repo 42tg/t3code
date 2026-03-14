@@ -15,6 +15,7 @@ import {
   GitCheckoutInput,
   GitCreateBranchInput,
   GitDiffBranchInput,
+  GitDiffWorkingTreeInput,
   GitPreparePullRequestThreadInput,
   GitCreateWorktreeInput,
   GitFetchPrDetailsInput,
@@ -79,6 +80,7 @@ export const WS_METHODS = {
   gitResolvePullRequest: "git.resolvePullRequest",
   gitPreparePullRequestThread: "git.preparePullRequestThread",
   gitDiffBranch: "git.diffBranch",
+  gitDiffWorkingTree: "git.diffWorkingTree",
   gitListOpenPrs: "git.listOpenPrs",
 
   // Jira methods
@@ -158,6 +160,7 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.gitResolvePullRequest, GitPullRequestRefInput),
   tagRequestBody(WS_METHODS.gitPreparePullRequestThread, GitPreparePullRequestThreadInput),
   tagRequestBody(WS_METHODS.gitDiffBranch, GitDiffBranchInput),
+  tagRequestBody(WS_METHODS.gitDiffWorkingTree, GitDiffWorkingTreeInput),
   tagRequestBody(WS_METHODS.gitListOpenPrs, GitListOpenPrsInput),
 
   // Jira methods

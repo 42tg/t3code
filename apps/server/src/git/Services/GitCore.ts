@@ -15,6 +15,7 @@ import type {
   GitCreateWorktreeResult,
   GitDiffBranchInput,
   GitDiffBranchResult,
+  GitDiffWorkingTreeInput,
   GitInitInput,
   GitListBranchesInput,
   GitListBranchesResult,
@@ -223,6 +224,13 @@ export interface GitCoreShape {
    */
   readonly diffBranch: (
     input: GitDiffBranchInput,
+  ) => Effect.Effect<GitDiffBranchResult, GitCommandError>;
+
+  /**
+   * Compute a diff of uncommitted working tree changes against HEAD.
+   */
+  readonly diffWorkingTree: (
+    input: GitDiffWorkingTreeInput,
   ) => Effect.Effect<GitDiffBranchResult, GitCommandError>;
 }
 

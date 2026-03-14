@@ -161,6 +161,7 @@ export function createWsNativeApi(): NativeApi {
       preparePullRequestThread: (input) =>
         transport.request(WS_METHODS.gitPreparePullRequestThread, input),
       diffBranch: (input) => transport.request(WS_METHODS.gitDiffBranch, input),
+      diffWorkingTree: (input) => transport.request(WS_METHODS.gitDiffWorkingTree, input),
       listOpenPrs: (input) => transport.request(WS_METHODS.gitListOpenPrs, input),
     },
     contextMenu: {
