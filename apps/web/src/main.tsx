@@ -17,15 +17,6 @@ const router = getRouter(history);
 
 document.title = APP_DISPLAY_NAME;
 
-// Register PWA service worker in browser (non-Electron) context only.
-if (!isElectron && "serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => {
-      // Service worker registration failed — non-critical for app functionality.
-    });
-  });
-}
-
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <RouterProvider router={router} />
