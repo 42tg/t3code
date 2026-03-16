@@ -35,10 +35,18 @@ export function useMessageQueue() {
     setQueue(queueRef.current);
   }, []);
 
+  const drainAll = useCallback((): QueuedMessage[] => {
+    const items = queueRef.current;
+    if (items.length === 0) return items;
+    queueRef.current = [];
+    setQueue([]);
+    return items;
+  }, []);
+
   const clearQueue = useCallback(() => {
     queueRef.current = [];
     setQueue([]);
   }, []);
 
-  return { queue, enqueue, popFirst, removeById, clearQueue };
+  return { queue, enqueue, popFirst, drainAll, removeById, clearQueue };
 }

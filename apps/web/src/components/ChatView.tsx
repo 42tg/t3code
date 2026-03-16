@@ -323,7 +323,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const {
     queue: messageQueue,
     enqueue: enqueueMessage,
-    popFirst: popFirstQueuedMessage,
+    drainAll: drainAllQueuedMessages,
     removeById: removeQueuedMessage,
     clearQueue: clearMessageQueue,
   } = useMessageQueue();
@@ -2567,17 +2567,21 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const onSendRef = useRef(onSend);
   onSendRef.current = onSend;
 
-  // Auto-flush queued messages when the AI becomes idle
+  // Auto-flush queued messages when the AI becomes idle.
+  // All queued messages are drained and merged into a single turn.
   useEffect(() => {
     if (!latestTurnSettled) return;
     if (messageQueue.length === 0) return;
     if (isSendBusy || sendInFlightRef.current) return;
 
-    const next = popFirstQueuedMessage();
-    if (!next) return;
+    const items = drainAllQueuedMessages();
+    if (items.length === 0) return;
 
-    void onSendRef.current(undefined, next);
-  }, [latestTurnSettled, messageQueue, isSendBusy, popFirstQueuedMessage]);
+    const mergedText = items.map((m) => m.text).join("\n\n");
+    const mergedImages = items.flatMap((m) => m.images);
+
+    void onSendRef.current(undefined, { text: mergedText, images: mergedImages });
+  }, [latestTurnSettled, messageQueue, isSendBusy, drainAllQueuedMessages]);
 
   // Clear the queue when the user switches threads
   useEffect(() => {
