@@ -1,5 +1,6 @@
 import { parsePatchFiles } from "@pierre/diffs";
 import DiffFileReviewComments from "./DiffFileReviewComments";
+import { reviewCommentListQueryOptions } from "../lib/reviewCommentReactQuery";
 import { FileDiff, type FileDiffMetadata, Virtualizer } from "@pierre/diffs/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
@@ -135,7 +136,7 @@ function DiffFileListView({
   onToggleCollapsed: (key: string) => void;
   onOpenFile: (path: string) => void;
   patchViewportRef: React.RefObject<HTMLDivElement | null>;
-  reviewCommentsByFile?: Map<string, import("@t3tools/contracts").ReviewComment[]>;
+  reviewCommentsByFile?: Map<string, import("@t3tools/contracts").ReviewComment[]> | undefined;
 }) {
   return (
     <div
@@ -271,6 +272,21 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
     activeProjectId ? store.projects.find((project) => project.id === activeProjectId) : undefined,
   );
   const activeCwd = activeThread?.worktreePath ?? activeProject?.cwd;
+  const reviewCommentsQuery = useQuery(reviewCommentListQueryOptions(activeThreadId));
+  const reviewCommentsByFile = useMemo(() => {
+    const comments = reviewCommentsQuery.data?.comments;
+    if (!comments || comments.length === 0) return undefined;
+    const map = new Map<string, (typeof comments)[number][]>();
+    for (const comment of comments) {
+      const existing = map.get(comment.file);
+      if (existing) {
+        existing.push(comment);
+      } else {
+        map.set(comment.file, [comment]);
+      }
+    }
+    return map;
+  }, [reviewCommentsQuery.data?.comments]);
   const gitBranchesQuery = useQuery(gitBranchesQueryOptions(activeCwd ?? null));
   const isGitRepo = gitBranchesQuery.data?.isRepo ?? true;
   const defaultBranchName = useMemo(() => {
@@ -854,6 +870,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
             onToggleCollapsed={toggleFileCollapsed}
             onOpenFile={openDiffFileInEditor}
             patchViewportRef={patchViewportRef}
+            reviewCommentsByFile={reviewCommentsByFile}
           />
         ) : (
           <div className="min-h-0 flex-1 overflow-auto p-2">
@@ -891,6 +908,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
             onToggleCollapsed={toggleFileCollapsed}
             onOpenFile={openDiffFileInEditor}
             patchViewportRef={patchViewportRef}
+            reviewCommentsByFile={reviewCommentsByFile}
           />
         ) : (
           <div className="min-h-0 flex-1 overflow-auto p-2">
@@ -931,6 +949,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
           onToggleCollapsed={toggleFileCollapsed}
           onOpenFile={openDiffFileInEditor}
           patchViewportRef={patchViewportRef}
+          reviewCommentsByFile={reviewCommentsByFile}
         />
       ) : (
         <div className="h-full overflow-auto p-2">
