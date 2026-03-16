@@ -811,6 +811,49 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         });
       }
 
+      case WS_METHODS.projectsReadFile: {
+        const body = stripRequestTag(request.body);
+        // Try resolving relative to cwd first; if not found, walk up to
+        // the git repo root (cwd might be a subdirectory like apps/server).
+        const candidates = [path.resolve(body.cwd, body.relativePath)];
+        const gitRoot = yield* Effect.tryPromise({
+          try: async () => {
+            const { execSync } = await import("node:child_process");
+            return execSync("git rev-parse --show-toplevel", {
+              cwd: body.cwd,
+              encoding: "utf-8",
+            }).trim();
+          },
+          catch: () => null,
+        }).pipe(Effect.catch(() => Effect.succeed(null)));
+        if (gitRoot && gitRoot !== path.resolve(body.cwd)) {
+          candidates.push(path.resolve(gitRoot, body.relativePath));
+        }
+
+        let content: string | null = null;
+        for (const candidate of candidates) {
+          const result = yield* fileSystem.readFileString(candidate).pipe(
+            Effect.map((c) => ({ path: candidate, content: c })),
+            Effect.catch(() => Effect.succeed(null)),
+          );
+          if (result) {
+            content = result.content;
+            break;
+          }
+        }
+
+        if (content === null) {
+          return yield* new RouteRequestError({
+            message: `Failed to read file: ${body.relativePath} (tried: ${candidates.join(", ")})`,
+          });
+        }
+        const allLines = content.split("\n");
+        const startLine = body.startLine ?? 1;
+        const endLine = body.endLine ?? allLines.length;
+        const slicedLines = allLines.slice(startLine - 1, endLine);
+        return { content: slicedLines.join("\n"), totalLines: allLines.length };
+      }
+
       case WS_METHODS.projectsWriteFile: {
         const body = stripRequestTag(request.body);
         const target = yield* resolveWorkspaceWritePath({

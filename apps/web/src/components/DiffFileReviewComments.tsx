@@ -80,7 +80,7 @@ export function buildLineAnnotations(
 ): DiffLineAnnotation<ReviewComment>[] {
   return comments.map((comment) => ({
     side: "additions" as const,
-    lineNumber: comment.startLine,
+    lineNumber: comment.endLine ?? comment.startLine,
     metadata: comment,
   }));
 }

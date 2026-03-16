@@ -16,6 +16,7 @@ import {
   GitBranchIcon,
   ListTreeIcon,
   LoaderIcon,
+  MessageSquareTextIcon,
   Rows3Icon,
 } from "lucide-react";
 import {
@@ -36,7 +37,7 @@ import {
 } from "~/lib/gitReactQuery";
 import { checkpointDiffQueryOptions } from "~/lib/providerReactQuery";
 import { cn } from "~/lib/utils";
-import { readNativeApi } from "../nativeApi";
+import { ensureNativeApi, readNativeApi } from "../nativeApi";
 import { resolvePathLinkTarget } from "../terminal-links";
 import { parseDiffRouteSearch, stripDiffSearchParams } from "../diffRouteSearch";
 import { useTheme } from "../hooks/useTheme";
@@ -119,6 +120,267 @@ function computeDiffStats(files: FileDiffMetadata[]): { additions: number; delet
   return { additions, deletions };
 }
 
+/**
+ * Renders an annotated file that's not part of the diff.
+ * Fetches the file content and generates a synthetic context-only patch
+ * so the annotated lines are visible with their code in the diff viewer.
+ */
+function AnnotatedFileContextView({
+  file,
+  comments,
+  cwd,
+  resolvedTheme,
+  diffRenderMode,
+  isCollapsed,
+  onToggleCollapsed,
+}: {
+  file: string;
+  comments: import("@t3tools/contracts").ReviewComment[];
+  cwd: string;
+  resolvedTheme: DiffThemeType;
+  diffRenderMode: DiffRenderMode;
+  isCollapsed: boolean;
+  onToggleCollapsed: () => void;
+}) {
+  const CONTEXT_PADDING = 10;
+
+  const fileContentQuery = useQuery({
+    queryKey: ["projects", "readFile", cwd, file] as const,
+    queryFn: async () => {
+      const api = ensureNativeApi();
+      return api.projects.readFile({ cwd, relativePath: file });
+    },
+    enabled: cwd.length > 0,
+    staleTime: 30_000,
+  });
+
+  // Generate a synthetic unified diff with separate hunks per comment cluster
+  const syntheticPatch = useMemo(() => {
+    if (!fileContentQuery.data) return null;
+    const allLines = fileContentQuery.data.content.split("\n");
+    const totalLines = allLines.length;
+
+    // Build merged ranges from comments (±CONTEXT_PADDING), collapsing overlaps
+    const rawRanges = comments
+      .map((c) => ({
+        start: Math.max(1, c.startLine - CONTEXT_PADDING),
+        end: Math.min(totalLines, (c.endLine ?? c.startLine) + CONTEXT_PADDING),
+      }))
+      .toSorted((a, b) => a.start - b.start);
+
+    const merged: { start: number; end: number }[] = [];
+    for (const r of rawRanges) {
+      const last = merged[merged.length - 1];
+      if (last && r.start <= last.end + 1) {
+        last.end = Math.max(last.end, r.end);
+      } else {
+        merged.push({ ...r });
+      }
+    }
+
+    // Build unified diff with one hunk per merged range
+    const hunks = merged.map((range) => {
+      const count = range.end - range.start + 1;
+      const hunkHeader = `@@ -${range.start},${count} +${range.start},${count} @@`;
+      const hunkLines = allLines.slice(range.start - 1, range.end).map((l: string) => ` ${l}`);
+      return `${hunkHeader}\n${hunkLines.join("\n")}`;
+    });
+
+    return `--- a/${file}\n+++ b/${file}\n${hunks.join("\n")}\n`;
+  }, [fileContentQuery.data, file, comments]);
+
+  const fileDiff = useMemo(() => {
+    if (!syntheticPatch) return null;
+    try {
+      const parsed = parsePatchFiles(syntheticPatch, `review-context:${file}`);
+      return parsed.flatMap((p) => p.files)[0] ?? null;
+    } catch {
+      return null;
+    }
+  }, [syntheticPatch, file]);
+
+  return (
+    <div
+      data-diff-file-path={file}
+      className="diff-render-file mb-2 rounded-md first:mt-2 last:mb-0"
+    >
+      <button
+        type="button"
+        className="flex w-full cursor-pointer items-center gap-1.5 border-b border-border/60 bg-[color-mix(in_srgb,var(--card)_94%,var(--foreground))] px-3 py-1.5 text-left text-[12px] font-medium text-foreground/90 transition-colors hover:bg-[color-mix(in_srgb,var(--card)_88%,var(--foreground))] hover:text-foreground"
+        onClick={onToggleCollapsed}
+      >
+        <ChevronDownIcon
+          className={cn(
+            "size-3.5 shrink-0 text-muted-foreground/60 transition-transform",
+            isCollapsed && "-rotate-90",
+          )}
+        />
+        <MessageSquareTextIcon className="size-3.5 shrink-0 text-primary/60" />
+        <span className="min-w-0 truncate font-mono">{file}</span>
+        <span className="ml-auto shrink-0 text-[10px] font-normal text-muted-foreground/60">
+          {comments.length} comment{comments.length !== 1 ? "s" : ""}
+        </span>
+      </button>
+      {!isCollapsed && fileDiff ? (
+        <FileDiff
+          fileDiff={fileDiff}
+          options={{
+            diffStyle: diffRenderMode === "split" ? "split" : "unified",
+            lineDiffType: "none",
+            theme: resolveDiffThemeName(resolvedTheme),
+            themeType: resolvedTheme as DiffThemeType,
+            unsafeCSS: DIFF_UNSAFE_CSS,
+          }}
+          {...{
+            lineAnnotations: buildLineAnnotations(comments),
+            renderAnnotation: renderReviewAnnotation,
+          }}
+        />
+      ) : !isCollapsed && fileContentQuery.isLoading ? (
+        <div className="flex items-center gap-2 px-3 py-3 text-xs text-muted-foreground/60">
+          <LoaderIcon className="size-3 animate-spin" />
+          Loading file...
+        </div>
+      ) : !isCollapsed ? (
+        <div className="px-3 py-2">
+          {fileContentQuery.isError && (
+            <p className="mb-2 text-[11px] text-destructive/70">
+              {fileContentQuery.error instanceof Error
+                ? fileContentQuery.error.message
+                : "Failed to read file."}
+            </p>
+          )}
+          {comments.map((comment) => (
+            <div
+              key={comment.id}
+              className="mb-1.5 rounded border-l-2 border-l-amber-400 bg-amber-500/8 px-3 py-2"
+            >
+              <span className="font-mono text-[11px] text-muted-foreground">
+                L{comment.startLine}
+                {comment.endLine && comment.endLine !== comment.startLine
+                  ? `–${comment.endLine}`
+                  : ""}
+              </span>
+              <p className="mt-0.5 text-xs text-foreground/90 whitespace-pre-wrap">
+                {comment.body}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * For diff files: renders additional code context hunks for review comments
+ * on lines NOT visible in the diff, with inline annotations.
+ */
+function UnmatchedCommentsContextView({
+  fileDiff,
+  comments,
+  cwd,
+  resolvedTheme,
+  diffRenderMode,
+}: {
+  fileDiff: FileDiffMetadata;
+  comments: import("@t3tools/contracts").ReviewComment[] | undefined;
+  cwd: string;
+  resolvedTheme: DiffThemeType;
+  diffRenderMode: DiffRenderMode;
+}) {
+  const CONTEXT_PADDING = 10;
+
+  // Collect all line numbers visible in the diff hunks
+  const visibleLines = useMemo(() => {
+    const lines = new Set<number>();
+    for (const hunk of fileDiff.hunks) {
+      const start = hunk.additionStart;
+      const count = hunk.additionCount;
+      for (let i = start; i < start + count; i++) lines.add(i);
+    }
+    return lines;
+  }, [fileDiff.hunks]);
+
+  const unmatched = useMemo(
+    () => (comments ?? []).filter((c) => !visibleLines.has(c.startLine)),
+    [comments, visibleLines],
+  );
+
+  const file = resolveFileDiffPath(fileDiff);
+
+  const fileContentQuery = useQuery({
+    queryKey: ["projects", "readFile", cwd, file] as const,
+    queryFn: async () => {
+      const api = ensureNativeApi();
+      return api.projects.readFile({ cwd, relativePath: file });
+    },
+    enabled: cwd.length > 0 && unmatched.length > 0,
+    staleTime: 30_000,
+  });
+
+  const syntheticFileDiff = useMemo(() => {
+    if (!fileContentQuery.data || unmatched.length === 0) return null;
+    const allLines = fileContentQuery.data.content.split("\n");
+    const totalLines = allLines.length;
+
+    // Build merged ranges from unmatched comments
+    const rawRanges = unmatched
+      .map((c) => ({
+        start: Math.max(1, c.startLine - CONTEXT_PADDING),
+        end: Math.min(totalLines, (c.endLine ?? c.startLine) + CONTEXT_PADDING),
+      }))
+      .toSorted((a, b) => a.start - b.start);
+
+    const merged: { start: number; end: number }[] = [];
+    for (const r of rawRanges) {
+      const last = merged[merged.length - 1];
+      if (last && r.start <= last.end + 1) {
+        last.end = Math.max(last.end, r.end);
+      } else {
+        merged.push({ ...r });
+      }
+    }
+
+    const hunks = merged.map((range) => {
+      const count = range.end - range.start + 1;
+      const hunkHeader = `@@ -${range.start},${count} +${range.start},${count} @@`;
+      const hunkLines = allLines.slice(range.start - 1, range.end).map((l: string) => ` ${l}`);
+      return `${hunkHeader}\n${hunkLines.join("\n")}`;
+    });
+
+    const patch = `--- a/${file}\n+++ b/${file}\n${hunks.join("\n")}\n`;
+    try {
+      const parsed = parsePatchFiles(patch, `unmatched-context:${file}`);
+      return parsed.flatMap((p) => p.files)[0] ?? null;
+    } catch {
+      return null;
+    }
+  }, [fileContentQuery.data, unmatched, file]);
+
+  if (unmatched.length === 0) return null;
+  if (!syntheticFileDiff) return null;
+
+  return (
+    <FileDiff
+      fileDiff={syntheticFileDiff}
+      options={{
+        diffStyle: diffRenderMode === "split" ? "split" : "unified",
+        lineDiffType: "none",
+        theme: resolveDiffThemeName(resolvedTheme),
+        themeType: resolvedTheme as DiffThemeType,
+        unsafeCSS: DIFF_UNSAFE_CSS,
+      }}
+      {...{
+        lineAnnotations: buildLineAnnotations(unmatched),
+        renderAnnotation: renderReviewAnnotation,
+      }}
+    />
+  );
+}
+
+const normalizeCommentPath = (p: string) => p.replace(/^\.\//, "").replace(/^[ab]\//, "");
+
 function DiffFileListView({
   files,
   resolvedTheme,
@@ -128,6 +390,8 @@ function DiffFileListView({
   onOpenFile,
   patchViewportRef,
   reviewCommentsByFile,
+  activeCwd,
+  projectCwd,
 }: {
   files: FileDiffMetadata[];
   resolvedTheme: DiffThemeType;
@@ -137,10 +401,9 @@ function DiffFileListView({
   onOpenFile: (path: string) => void;
   patchViewportRef: React.RefObject<HTMLDivElement | null>;
   reviewCommentsByFile?: Map<string, import("@t3tools/contracts").ReviewComment[]> | undefined;
+  activeCwd?: string | undefined;
+  projectCwd?: string | undefined;
 }) {
-  // Build a normalized lookup for review comments so paths like
-  // "src/foo.ts" match regardless of leading "./" or diff a/b prefix.
-  const normalizeCommentPath = (p: string) => p.replace(/^\.\//, "").replace(/^[ab]\//, "");
   const commentLookup = useMemo(() => {
     if (!reviewCommentsByFile) return undefined;
     const map = new Map<string, import("@t3tools/contracts").ReviewComment[]>();
@@ -159,6 +422,28 @@ function DiffFileListView({
         className="diff-render-surface h-full min-h-0 overflow-auto px-2 pb-2"
         config={{ overscrollSize: 600, intersectionObserverMargin: 1200 }}
       >
+        {/* Files with review comments but NOT in the diff */}
+        {commentLookup &&
+          [...commentLookup.entries()]
+            .filter(
+              ([commentFile]) =>
+                !files.some((f) => normalizeCommentPath(resolveFileDiffPath(f)) === commentFile),
+            )
+            .map(([commentFile, comments]) => (
+              <AnnotatedFileContextView
+                key={`review-only:${commentFile}`}
+                file={commentFile}
+                comments={comments}
+                cwd={projectCwd ?? activeCwd ?? ""}
+                resolvedTheme={resolvedTheme}
+                diffRenderMode={diffRenderMode}
+                isCollapsed={collapsedFiles.has(`review:${commentFile}:${resolvedTheme}`)}
+                onToggleCollapsed={() =>
+                  onToggleCollapsed(`review:${commentFile}:${resolvedTheme}`)
+                }
+              />
+            ))}
+        {/* Regular diff files */}
         {files.map((fileDiff) => {
           const filePath = resolveFileDiffPath(fileDiff);
           const normalizedFilePath = normalizeCommentPath(filePath);
@@ -185,6 +470,12 @@ function DiffFileListView({
                   )}
                 />
                 <span className="min-w-0 truncate font-mono">{filePath}</span>
+                {(commentLookup?.get(normalizedFilePath)?.length ?? 0) > 0 && (
+                  <span className="shrink-0 rounded bg-primary/12 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                    {commentLookup!.get(normalizedFilePath)!.length} comment
+                    {commentLookup!.get(normalizedFilePath)!.length !== 1 ? "s" : ""}
+                  </span>
+                )}
                 {(fileStats.additions > 0 || fileStats.deletions > 0) && (
                   <span className="ml-auto shrink-0 font-mono text-[10px] font-normal">
                     {fileStats.additions > 0 && (
@@ -229,6 +520,13 @@ function DiffFileListView({
                           renderAnnotation: renderReviewAnnotation,
                         }
                       : {})}
+                  />
+                  <UnmatchedCommentsContextView
+                    fileDiff={fileDiff}
+                    comments={commentLookup?.get(normalizedFilePath)}
+                    cwd={projectCwd ?? activeCwd ?? ""}
+                    resolvedTheme={resolvedTheme}
+                    diffRenderMode={diffRenderMode}
                   />
                 </div>
               )}
@@ -875,11 +1173,11 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
                 : "Failed to load working tree diff."}
             </p>
           </div>
-        ) : !workingTreePatch ? (
+        ) : !workingTreePatch && !reviewCommentsByFile ? (
           <div className="flex flex-1 items-center justify-center px-3 py-2 text-xs text-muted-foreground/70">
             <p>No uncommitted changes.</p>
           </div>
-        ) : workingTreePatch.kind === "files" ? (
+        ) : workingTreePatch?.kind === "files" || !workingTreePatch ? (
           <DiffFileListView
             files={workingTreeFiles}
             resolvedTheme={resolvedTheme}
@@ -889,6 +1187,8 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
             onOpenFile={openDiffFileInEditor}
             patchViewportRef={patchViewportRef}
             reviewCommentsByFile={reviewCommentsByFile}
+            activeCwd={activeCwd}
+            projectCwd={activeProject?.cwd}
           />
         ) : (
           <div className="min-h-0 flex-1 overflow-auto p-2">
@@ -913,11 +1213,11 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
                 : "Failed to load branch diff."}
             </p>
           </div>
-        ) : !branchDiffPatch ? (
+        ) : !branchDiffPatch && !reviewCommentsByFile ? (
           <div className="flex flex-1 items-center justify-center px-3 py-2 text-xs text-muted-foreground/70">
             <p>No changes compared to {defaultBranchName}.</p>
           </div>
-        ) : branchDiffPatch.kind === "files" ? (
+        ) : branchDiffPatch?.kind === "files" || !branchDiffPatch ? (
           <DiffFileListView
             files={branchDiffFiles}
             resolvedTheme={resolvedTheme}
@@ -927,6 +1227,8 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
             onOpenFile={openDiffFileInEditor}
             patchViewportRef={patchViewportRef}
             reviewCommentsByFile={reviewCommentsByFile}
+            activeCwd={activeCwd}
+            projectCwd={activeProject?.cwd}
           />
         ) : (
           <div className="min-h-0 flex-1 overflow-auto p-2">
@@ -949,6 +1251,19 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
       ) : !renderablePatch ? (
         isLoadingCheckpointDiff ? (
           <DiffPanelLoadingState label="Loading checkpoint diff..." />
+        ) : reviewCommentsByFile ? (
+          <DiffFileListView
+            files={[]}
+            resolvedTheme={resolvedTheme}
+            diffRenderMode={diffRenderMode}
+            collapsedFiles={collapsedFiles}
+            onToggleCollapsed={toggleFileCollapsed}
+            onOpenFile={openDiffFileInEditor}
+            patchViewportRef={patchViewportRef}
+            reviewCommentsByFile={reviewCommentsByFile}
+            activeCwd={activeCwd}
+            projectCwd={activeProject?.cwd}
+          />
         ) : (
           <div className="flex flex-1 items-center justify-center px-3 py-2 text-xs text-muted-foreground/70">
             <p>
