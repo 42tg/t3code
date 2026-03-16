@@ -153,6 +153,7 @@ export interface ClaudeCodeAdapterLiveOptions {
   }) => ClaudeQueryRuntime;
   readonly nativeEventLogPath?: string;
   readonly nativeEventLogger?: EventNdjsonLogger;
+  readonly reviewCommentRepository?: ReviewCommentRepositoryShape;
 }
 
 function isUuid(value: string): boolean {
@@ -509,9 +510,7 @@ function sdkNativeItemId(message: SDKMessage): string | undefined {
 
 function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
   return Effect.gen(function* () {
-    // TODO: Register review comment MCP tools via createSdkMcpServer() once
-    // the Effect ServiceMap layer injection is resolved for tests.
-    const reviewCommentRepo: ReviewCommentRepositoryShape | undefined = undefined;
+    const reviewCommentRepo = options?.reviewCommentRepository;
 
     const nativeEventLogger =
       options?.nativeEventLogger ??

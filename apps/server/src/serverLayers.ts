@@ -37,6 +37,7 @@ import { GitServiceLive } from "./git/Layers/GitService";
 import { JiraCliLive } from "./jira/Layers/JiraCli";
 import { JiraManagerLive } from "./jira/Layers/JiraManager";
 import { ReviewCommentRepositoryLive } from "./persistence/Layers/ReviewCommentRepository";
+import { ReviewCommentRepository } from "./persistence/Services/ReviewCommentRepository";
 import { BunPtyAdapterLive } from "./terminal/Layers/BunPTY";
 import { NodePtyAdapterLive } from "./terminal/Layers/NodePTY";
 import { AnalyticsService } from "./telemetry/Services/AnalyticsService";
@@ -62,9 +63,15 @@ export function makeServerProviderLayer(): Layer.Layer<
     const codexAdapterLayer = makeCodexAdapterLive(
       nativeEventLogger ? { nativeEventLogger } : undefined,
     );
-    const claudeAdapterLayer = makeClaudeCodeAdapterLive(
-      nativeEventLogger ? { nativeEventLogger } : undefined,
-    );
+    // Build review comment repository and pass it to the Claude adapter
+    // so it can register MCP tools for structured review comments.
+    const reviewCommentRepo = yield* Effect.gen(function* () {
+      return yield* ReviewCommentRepository;
+    }).pipe(Effect.provide(ReviewCommentRepositoryLive));
+    const claudeAdapterLayer = makeClaudeCodeAdapterLive({
+      ...(nativeEventLogger ? { nativeEventLogger } : {}),
+      reviewCommentRepository: reviewCommentRepo,
+    });
     const adapterRegistryLayer = ProviderAdapterRegistryLive.pipe(
       Layer.provide(codexAdapterLayer),
       Layer.provide(claudeAdapterLayer),
