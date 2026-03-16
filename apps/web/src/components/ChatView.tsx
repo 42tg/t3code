@@ -2380,11 +2380,15 @@ export default function ChatView({ threadId }: ChatViewProps) {
     forceStickToBottom();
 
     setThreadError(threadIdForSend, null);
-    promptRef.current = "";
-    clearComposerDraftContent(threadIdForSend);
-    setComposerHighlightedItemId(null);
-    setComposerCursor(0);
-    setComposerTrigger(null);
+    // Only clear the composer when the user initiated the send directly.
+    // Queued flushes should not wipe what the user is currently typing.
+    if (!queuedContent) {
+      promptRef.current = "";
+      clearComposerDraftContent(threadIdForSend);
+      setComposerHighlightedItemId(null);
+      setComposerCursor(0);
+      setComposerTrigger(null);
+    }
 
     let createdServerThreadForLocalDraft = false;
     let turnStartSucceeded = false;
