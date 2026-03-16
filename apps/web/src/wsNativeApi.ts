@@ -166,6 +166,13 @@ export function createWsNativeApi(): NativeApi {
       diffWorkingTree: (input) => transport.request(WS_METHODS.gitDiffWorkingTree, input),
       listOpenPrs: (input) => transport.request(WS_METHODS.gitListOpenPrs, input),
     },
+    reviewComment: {
+      add: (input) => transport.request(WS_METHODS.reviewCommentAdd, input),
+      update: (input) => transport.request(WS_METHODS.reviewCommentUpdate, input),
+      delete: (input) => transport.request(WS_METHODS.reviewCommentDelete, input),
+      list: (input) => transport.request(WS_METHODS.reviewCommentList, input),
+      publish: (input) => transport.request(WS_METHODS.reviewCommentPublish, input),
+    },
     contextMenu: {
       show: async <T extends string>(
         items: readonly ContextMenuItem<T>[],

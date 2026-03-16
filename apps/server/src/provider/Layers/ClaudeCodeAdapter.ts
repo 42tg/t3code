@@ -47,6 +47,11 @@ import {
 } from "../Errors.ts";
 import { resolveEnabledPlugins } from "@t3tools/shared/claude-plugins";
 import { getClaudeContextWindowMode } from "@t3tools/shared/model";
+import {
+  ReviewCommentRepository,
+  type ReviewCommentRepositoryShape,
+} from "../../persistence/Services/ReviewCommentRepository.ts";
+import { createReviewCommentMcpServer } from "../reviewCommentTools.ts";
 import { ClaudeCodeAdapter, type ClaudeCodeAdapterShape } from "../Services/ClaudeCodeAdapter.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 
@@ -504,6 +509,10 @@ function sdkNativeItemId(message: SDKMessage): string | undefined {
 
 function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
   return Effect.gen(function* () {
+    // TODO: Register review comment MCP tools via createSdkMcpServer() once
+    // the Effect ServiceMap layer injection is resolved for tests.
+    const reviewCommentRepo: ReviewCommentRepositoryShape | undefined = undefined;
+
     const nativeEventLogger =
       options?.nativeEventLogger ??
       (options?.nativeEventLogPath !== undefined
@@ -1865,6 +1874,11 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
         const contextWindowMode = getClaudeContextWindowMode(input.model);
         const use1MBeta = modelOptions?.largeContext === true && contextWindowMode === "1m-beta";
 
+        // Register review comment MCP tools for this session
+        const reviewCommentMcpServer = reviewCommentRepo
+          ? createReviewCommentMcpServer(threadId, reviewCommentRepo)
+          : undefined;
+
         const queryOptions: ClaudeQueryOptions = {
           ...(input.cwd ? { cwd: input.cwd } : {}),
           ...(input.model ? { model: input.model } : {}),
@@ -1887,6 +1901,9 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
           env: process.env,
           ...(input.cwd ? { additionalDirectories: [input.cwd] } : {}),
           ...(sdkPlugins.length > 0 ? { plugins: sdkPlugins } : {}),
+          ...(reviewCommentMcpServer
+            ? { mcpServers: { "review-comments": reviewCommentMcpServer } }
+            : {}),
         };
 
         const queryRuntime = yield* Effect.try({

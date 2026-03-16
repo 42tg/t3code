@@ -1,4 +1,5 @@
 import { parsePatchFiles } from "@pierre/diffs";
+import DiffFileReviewComments from "./DiffFileReviewComments";
 import { FileDiff, type FileDiffMetadata, Virtualizer } from "@pierre/diffs/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
@@ -125,6 +126,7 @@ function DiffFileListView({
   onToggleCollapsed,
   onOpenFile,
   patchViewportRef,
+  reviewCommentsByFile,
 }: {
   files: FileDiffMetadata[];
   resolvedTheme: DiffThemeType;
@@ -133,6 +135,7 @@ function DiffFileListView({
   onToggleCollapsed: (key: string) => void;
   onOpenFile: (path: string) => void;
   patchViewportRef: React.RefObject<HTMLDivElement | null>;
+  reviewCommentsByFile?: Map<string, import("@t3tools/contracts").ReviewComment[]>;
 }) {
   return (
     <div
@@ -205,6 +208,9 @@ function DiffFileListView({
                       unsafeCSS: DIFF_UNSAFE_CSS,
                     }}
                   />
+                  {reviewCommentsByFile?.get(filePath)?.length ? (
+                    <DiffFileReviewComments comments={reviewCommentsByFile.get(filePath)!} />
+                  ) : null}
                 </div>
               )}
             </div>

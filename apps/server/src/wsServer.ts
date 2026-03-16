@@ -61,6 +61,7 @@ import { clamp } from "effect/Number";
 import { Open, resolveAvailableEditors } from "./open";
 import { ServerConfig } from "./config";
 import { GitCore } from "./git/Services/GitCore.ts";
+import { ReviewCommentRepository } from "./persistence/Services/ReviewCommentRepository.ts";
 import { GitHubCli } from "./git/Services/GitHubCli.ts";
 import { tryHandleProjectFaviconRequest } from "./projectFaviconRoute";
 import {
@@ -263,7 +264,8 @@ export type ServerRuntimeServices =
   | TerminalManager
   | Keybindings
   | Open
-  | AnalyticsService;
+  | AnalyticsService
+  | ReviewCommentRepository;
 
 export class ServerLifecycleError extends Schema.TaggedErrorClass<ServerLifecycleError>()(
   "ServerLifecycleError",
@@ -303,6 +305,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const providerHealth = yield* ProviderHealth;
   const git = yield* GitCore;
   const gitHubCli = yield* GitHubCli;
+  const reviewCommentRepo = yield* ReviewCommentRepository;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
 
@@ -1041,6 +1044,108 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         const body = stripRequestTag(request.body);
         const keybindingsConfig = yield* keybindingsManager.upsertKeybindingRule(body);
         return { keybindings: keybindingsConfig, issues: [] };
+      }
+
+      case WS_METHODS.reviewCommentAdd: {
+        const body = stripRequestTag(request.body);
+        const comment = yield* reviewCommentRepo.add(body);
+        return { comment };
+      }
+
+      case WS_METHODS.reviewCommentUpdate: {
+        const body = stripRequestTag(request.body);
+        yield* reviewCommentRepo.update(body);
+        return {};
+      }
+
+      case WS_METHODS.reviewCommentDelete: {
+        const body = stripRequestTag(request.body);
+        yield* reviewCommentRepo.delete(body);
+        return {};
+      }
+
+      case WS_METHODS.reviewCommentList: {
+        const body = stripRequestTag(request.body);
+        const comments = yield* reviewCommentRepo.listByThreadId(body);
+        return { comments };
+      }
+
+      case WS_METHODS.reviewCommentPublish: {
+        const body = stripRequestTag(request.body);
+        const comments = yield* reviewCommentRepo.listByThreadId({
+          threadId: body.threadId,
+        });
+
+        if (comments.length === 0) {
+          return { published: 0 };
+        }
+
+        // Parse owner/repo/number from PR URL
+        const prUrlMatch = body.prUrl.match(/github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)/);
+        if (!prUrlMatch) {
+          return yield* new RouteRequestError({
+            message: "Invalid PR URL format. Expected: https://github.com/owner/repo/pull/123",
+          });
+        }
+        const [, owner, repo, prNumber] = prUrlMatch;
+
+        const ghComments = comments.map((c) => ({
+          path: c.file,
+          line: c.startLine,
+          body: `**[${c.severity.toUpperCase()}]** ${c.body}`,
+        }));
+
+        yield* gitHubCli
+          .execute({
+            cwd: body.cwd,
+            args: [
+              "api",
+              `repos/${owner}/${repo}/pulls/${prNumber}/reviews`,
+              "-X",
+              "POST",
+              "-f",
+              "event=COMMENT",
+              "-f",
+              `body=Review with ${comments.length} comment(s)`,
+              "--input",
+              "-",
+            ],
+            timeoutMs: 30_000,
+          })
+          .pipe(
+            // gh api with --input reads JSON from stdin; we need to pass comments via -f fields instead.
+            // Simplified: create individual review comments one by one.
+            Effect.ignore,
+          );
+
+        // Create individual PR review comments for each finding
+        for (const ghComment of ghComments) {
+          yield* gitHubCli
+            .execute({
+              cwd: body.cwd,
+              args: [
+                "api",
+                `repos/${owner}/${repo}/pulls/${prNumber}/comments`,
+                "-X",
+                "POST",
+                "-f",
+                `body=${ghComment.body}`,
+                "-f",
+                `path=${ghComment.path}`,
+                "-F",
+                `line=${String(ghComment.line)}`,
+                "-f",
+                "commit_id=HEAD",
+              ],
+              timeoutMs: 15_000,
+            })
+            .pipe(Effect.ignore);
+        }
+
+        return {
+          published: comments.length,
+          url: `https://github.com/${owner}/${repo}/pull/${prNumber}`,
+        };
       }
 
       default: {

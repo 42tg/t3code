@@ -53,6 +53,13 @@ import { KeybindingRule } from "./keybindings";
 import { ProjectSearchEntriesInput, ProjectWriteFileInput } from "./project";
 import { OpenInEditorInput, OpenInWarpInput } from "./editor";
 import { ServerConfigUpdatedPayload } from "./server";
+import {
+  ReviewCommentAddInput,
+  ReviewCommentUpdateInput,
+  ReviewCommentDeleteInput,
+  ReviewCommentListInput,
+  ReviewCommentPublishInput,
+} from "./reviewComment";
 
 // ── WebSocket RPC Method Names ───────────────────────────────────────
 
@@ -105,6 +112,13 @@ export const WS_METHODS = {
   terminalClear: "terminal.clear",
   terminalRestart: "terminal.restart",
   terminalClose: "terminal.close",
+
+  // Review comment methods
+  reviewCommentAdd: "reviewComment.add",
+  reviewCommentUpdate: "reviewComment.update",
+  reviewCommentDelete: "reviewComment.delete",
+  reviewCommentList: "reviewComment.list",
+  reviewCommentPublish: "reviewComment.publish",
 
   // Server meta
   serverGetConfig: "server.getConfig",
@@ -187,6 +201,13 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.terminalClear, TerminalClearInput),
   tagRequestBody(WS_METHODS.terminalRestart, TerminalRestartInput),
   tagRequestBody(WS_METHODS.terminalClose, TerminalCloseInput),
+
+  // Review comment methods
+  tagRequestBody(WS_METHODS.reviewCommentAdd, ReviewCommentAddInput),
+  tagRequestBody(WS_METHODS.reviewCommentUpdate, ReviewCommentUpdateInput),
+  tagRequestBody(WS_METHODS.reviewCommentDelete, ReviewCommentDeleteInput),
+  tagRequestBody(WS_METHODS.reviewCommentList, ReviewCommentListInput),
+  tagRequestBody(WS_METHODS.reviewCommentPublish, ReviewCommentPublishInput),
 
   // Server meta
   tagRequestBody(WS_METHODS.serverGetConfig, Schema.Struct({})),

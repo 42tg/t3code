@@ -36,6 +36,7 @@ import { CodexTextGenerationLive } from "./git/Layers/CodexTextGeneration";
 import { GitServiceLive } from "./git/Layers/GitService";
 import { JiraCliLive } from "./jira/Layers/JiraCli";
 import { JiraManagerLive } from "./jira/Layers/JiraManager";
+import { ReviewCommentRepositoryLive } from "./persistence/Layers/ReviewCommentRepository";
 import { BunPtyAdapterLive } from "./terminal/Layers/BunPTY";
 import { NodePtyAdapterLive } from "./terminal/Layers/NodePTY";
 import { AnalyticsService } from "./telemetry/Services/AnalyticsService";
@@ -140,5 +141,6 @@ export function makeServerRuntimeServicesLayer() {
     jiraManagerLayer,
     terminalLayer,
     KeybindingsLive,
+    ReviewCommentRepositoryLive,
   ).pipe(Layer.provideMerge(NodeServices.layer));
 }

@@ -12,3 +12,4 @@ export * from "./jira";
 export * from "./orchestration";
 export * from "./editor";
 export * from "./project";
+export * from "./reviewComment";

@@ -45,7 +45,24 @@ export function buildReviewPrompt(pr: GitFetchPrDetailsResult): string {
   lines.push(
     "---",
     "",
-    "Please review the changes in this PR. Focus on correctness, performance, and potential issues. Summarize your findings and flag anything that needs attention.",
+    "## Review Instructions",
+    "",
+    "Review the changes in this PR. Focus on correctness, performance, and potential issues.",
+    "",
+    "You have review comment tools available:",
+    "- `review_comment` — add a structured comment on a specific file:line",
+    "- `update_review_comment` — update an existing comment by ID",
+    "- `list_review_comments` — see all review comments made so far",
+    "",
+    "Use these tools to annotate specific lines with your findings. Each comment should target a file and line number from the diff.",
+    "",
+    "Severity levels:",
+    "- **info** — observation or note, no action needed",
+    "- **suggestion** — improvement idea, non-blocking",
+    "- **issue** — problem that should be fixed before merge",
+    "- **blocker** — critical issue that must be resolved",
+    "",
+    "After reviewing all files, provide a brief overall summary of your findings.",
   );
 
   return lines.join("\n");

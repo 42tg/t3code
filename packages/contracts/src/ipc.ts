@@ -74,6 +74,16 @@ import type {
   JiraGenerateProgressCommentResult,
 } from "./jira";
 import { EditorId, type OpenInWarpInput } from "./editor";
+import type {
+  ReviewCommentAddInput,
+  ReviewCommentAddResult,
+  ReviewCommentUpdateInput,
+  ReviewCommentDeleteInput,
+  ReviewCommentListInput,
+  ReviewCommentListResult,
+  ReviewCommentPublishInput,
+  ReviewCommentPublishResult,
+} from "./reviewComment";
 
 export interface ContextMenuItem<T extends string = string> {
   id: T;
@@ -202,6 +212,13 @@ export interface NativeApi {
     generateProgressComment: (
       input: JiraGenerateProgressCommentInput,
     ) => Promise<JiraGenerateProgressCommentResult>;
+  };
+  reviewComment: {
+    add: (input: ReviewCommentAddInput) => Promise<ReviewCommentAddResult>;
+    update: (input: ReviewCommentUpdateInput) => Promise<void>;
+    delete: (input: ReviewCommentDeleteInput) => Promise<void>;
+    list: (input: ReviewCommentListInput) => Promise<ReviewCommentListResult>;
+    publish: (input: ReviewCommentPublishInput) => Promise<ReviewCommentPublishResult>;
   };
   contextMenu: {
     show: <T extends string>(
