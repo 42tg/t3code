@@ -10,11 +10,12 @@ export interface QueuedMessage {
 
 // Module-level store keyed by threadId so the queue survives component
 // unmount/remount when the user navigates between threads.
+const EMPTY: QueuedMessage[] = [];
 const queuesByThread = new Map<string, QueuedMessage[]>();
 const listeners = new Set<() => void>();
 
 function getQueue(threadId: string): QueuedMessage[] {
-  return queuesByThread.get(threadId) ?? [];
+  return queuesByThread.get(threadId) ?? EMPTY;
 }
 
 function setQueue(threadId: string, next: QueuedMessage[]) {
@@ -37,7 +38,7 @@ export function useMessageQueue(threadId: string) {
   const queue = useSyncExternalStore(
     subscribe,
     () => getQueue(threadId),
-    () => [],
+    () => EMPTY,
   );
 
   const enqueue = useCallback(
