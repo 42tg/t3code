@@ -1,6 +1,17 @@
-import type { ReviewComment } from "@t3tools/contracts";
+/**
+ * Annotation card renderers for the unified diff annotation pipeline.
+ *
+ * Each annotation kind has its own card component here. The top-level
+ * `renderDiffAnnotation` callback is what gets passed to
+ * `@pierre/diffs` `FileDiff.renderAnnotation`.
+ */
+
 import type { DiffLineAnnotation } from "@pierre/diffs";
+import type { ReviewComment } from "@t3tools/contracts";
 import { AlertCircleIcon, InfoIcon, LightbulbIcon, OctagonAlertIcon } from "lucide-react";
+import type { DiffAnnotation } from "../lib/diffAnnotations";
+
+// ── Review comment severity config ──────────────────────────────────
 
 const SEVERITY_CONFIG = {
   info: {
@@ -33,11 +44,9 @@ const SEVERITY_CONFIG = {
   },
 } as const;
 
-/**
- * Inline annotation card rendered directly inside the diff via
- * `@pierre/diffs` `renderAnnotation` callback.
- */
-export function ReviewCommentInlineCard({ comment }: { comment: ReviewComment }) {
+// ── Review comment card ─────────────────────────────────────────────
+
+function ReviewCommentInlineCard({ comment }: { comment: ReviewComment }) {
   const config = SEVERITY_CONFIG[comment.severity];
   const Icon = config.icon;
 
@@ -71,27 +80,25 @@ export function ReviewCommentInlineCard({ comment }: { comment: ReviewComment })
   );
 }
 
-/**
- * Build `lineAnnotations` array for `@pierre/diffs` `FileDiff` component
- * from review comments for a specific file.
- */
-export function buildLineAnnotations(
-  comments: ReviewComment[],
-): DiffLineAnnotation<ReviewComment>[] {
-  return comments.map((comment) => ({
-    side: "additions" as const,
-    lineNumber: comment.endLine ?? comment.startLine,
-    metadata: comment,
-  }));
-}
+// ── Generic render callback ─────────────────────────────────────────
 
 /**
- * Render callback for `@pierre/diffs` `renderAnnotation` prop.
- * Receives annotation metadata and renders the inline review comment card.
+ * Render callback for `@pierre/diffs` `FileDiff.renderAnnotation`.
+ * Dispatches to the correct card based on annotation kind.
+ *
+ * New annotation kinds simply add a case here and their own card
+ * component above.
  */
-export function renderReviewAnnotation(
-  annotation: DiffLineAnnotation<ReviewComment>,
+export function renderDiffAnnotation(
+  annotation: DiffLineAnnotation<DiffAnnotation>,
 ): React.ReactNode {
-  if (!annotation.metadata) return null;
-  return <ReviewCommentInlineCard comment={annotation.metadata} />;
+  const meta = annotation.metadata;
+  if (!meta) return null;
+
+  switch (meta.kind) {
+    case "review-comment":
+      return <ReviewCommentInlineCard comment={meta.data} />;
+    default:
+      return null;
+  }
 }
