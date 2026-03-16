@@ -4,6 +4,8 @@ import { ensureNativeApi } from "../nativeApi";
 
 const REVIEW_COMMENTS_STALE_TIME_MS = 5_000;
 
+export const REVIEW_COMMENT_POLL_INTERVAL_ACTIVE = 2_000;
+
 export const reviewCommentQueryKeys = {
   all: ["reviewComments"] as const,
   list: (threadId: ThreadId | null) => ["reviewComments", "list", threadId] as const,
@@ -13,7 +15,10 @@ export function invalidateReviewCommentQueries(queryClient: QueryClient, threadI
   return queryClient.invalidateQueries({ queryKey: reviewCommentQueryKeys.list(threadId) });
 }
 
-export function reviewCommentListQueryOptions(threadId: ThreadId | null) {
+export function reviewCommentListQueryOptions(
+  threadId: ThreadId | null,
+  refetchInterval: number | false = false,
+) {
   return queryOptions({
     queryKey: reviewCommentQueryKeys.list(threadId),
     queryFn: async () => {
@@ -24,7 +29,7 @@ export function reviewCommentListQueryOptions(threadId: ThreadId | null) {
     enabled: threadId !== null,
     staleTime: REVIEW_COMMENTS_STALE_TIME_MS,
     refetchOnWindowFocus: true,
-    refetchInterval: 3_000,
+    refetchInterval,
   });
 }
 

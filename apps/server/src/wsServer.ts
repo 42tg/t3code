@@ -816,16 +816,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         // Try resolving relative to cwd first; if not found, walk up to
         // the git repo root (cwd might be a subdirectory like apps/server).
         const candidates = [path.resolve(body.cwd, body.relativePath)];
-        const gitRoot = yield* Effect.tryPromise({
-          try: async () => {
-            const { execSync } = await import("node:child_process");
-            return execSync("git rev-parse --show-toplevel", {
-              cwd: body.cwd,
-              encoding: "utf-8",
-            }).trim();
-          },
-          catch: () => null,
-        }).pipe(Effect.catch(() => Effect.succeed(null)));
+        const gitRoot = yield* git.getRepoRoot(body.cwd);
         if (gitRoot && gitRoot !== path.resolve(body.cwd)) {
           candidates.push(path.resolve(gitRoot, body.relativePath));
         }
@@ -1138,28 +1129,8 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           body: `**[${c.severity.toUpperCase()}]** ${c.body}`,
         }));
 
-        yield* gitHubCli
-          .execute({
-            cwd: body.cwd,
-            args: [
-              "api",
-              `repos/${owner}/${repo}/pulls/${prNumber}/reviews`,
-              "-X",
-              "POST",
-              "-f",
-              "event=COMMENT",
-              "-f",
-              `body=Review with ${comments.length} comment(s)`,
-              "--input",
-              "-",
-            ],
-            timeoutMs: 30_000,
-          })
-          .pipe(
-            // gh api with --input reads JSON from stdin; we need to pass comments via -f fields instead.
-            // Simplified: create individual review comments one by one.
-            Effect.ignore,
-          );
+        // Resolve actual HEAD commit SHA — GitHub API requires a real SHA, not "HEAD"
+        const headSha = yield* git.resolveRef(body.cwd, "HEAD");
 
         // Create individual PR review comments for each finding
         for (const ghComment of ghComments) {
@@ -1178,7 +1149,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
                 "-F",
                 `line=${String(ghComment.line)}`,
                 "-f",
-                "commit_id=HEAD",
+                `commit_id=${headSha}`,
               ],
               timeoutMs: 15_000,
             })

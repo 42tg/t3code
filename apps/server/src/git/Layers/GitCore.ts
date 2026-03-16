@@ -1516,6 +1516,20 @@ const makeGitCore = Effect.gen(function* () {
       Effect.map((stdout) => ({ diff: stdout })),
     );
 
+  const getRepoRoot: GitCoreShape["getRepoRoot"] = (cwd) =>
+    runGitStdout("GitCore.getRepoRoot", cwd, ["rev-parse", "--show-toplevel"], true).pipe(
+      Effect.map((stdout) => {
+        const trimmed = stdout.trim();
+        return trimmed.length > 0 ? trimmed : null;
+      }),
+      Effect.catch(() => Effect.succeed(null)),
+    );
+
+  const resolveRef: GitCoreShape["resolveRef"] = (cwd, ref) =>
+    runGitStdout("GitCore.resolveRef", cwd, ["rev-parse", ref], false).pipe(
+      Effect.map((stdout) => stdout.trim()),
+    );
+
   return {
     status,
     statusDetails,
@@ -1540,6 +1554,8 @@ const makeGitCore = Effect.gen(function* () {
     listLocalBranchNames,
     diffBranch,
     diffWorkingTree,
+    getRepoRoot,
+    resolveRef,
   } satisfies GitCoreShape;
 });
 

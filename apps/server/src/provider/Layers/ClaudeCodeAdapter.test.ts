@@ -124,6 +124,13 @@ function makeHarness(config?: {
       createInput = input;
       return query;
     },
+    reviewCommentRepository: {
+      add: () => Effect.fail(new Error("stub") as never),
+      update: () => Effect.fail(new Error("stub") as never),
+      delete: () => Effect.fail(new Error("stub") as never),
+      listByThreadId: () => Effect.succeed([]),
+      deleteByThreadId: () => Effect.fail(new Error("stub") as never),
+    },
     ...(config?.nativeEventLogger
       ? {
           nativeEventLogger: config.nativeEventLogger,

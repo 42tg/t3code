@@ -7,12 +7,14 @@ import {
   tool,
   type McpSdkServerConfigWithInstance,
 } from "@anthropic-ai/claude-agent-sdk";
+import { Effect } from "effect";
 import { z } from "zod";
 
+import type { ThreadId } from "@t3tools/contracts";
 import type { ReviewCommentRepositoryShape } from "../persistence/Services/ReviewCommentRepository.ts";
 
 export function createReviewCommentMcpServer(
-  threadId: string,
+  threadId: ThreadId,
   repository: ReviewCommentRepositoryShape,
 ): McpSdkServerConfigWithInstance {
   return createSdkMcpServer({
@@ -43,22 +45,16 @@ export function createReviewCommentMcpServer(
             ),
         },
         async (args) => {
-          const comment = await repository
-            .add({
-              threadId: threadId as any,
+          const comment = await Effect.runPromise(
+            repository.add({
+              threadId,
               file: args.file,
               startLine: args.startLine,
               ...(args.endLine !== undefined ? { endLine: args.endLine } : {}),
               body: args.body,
               severity: args.severity,
-            })
-            .pipe(
-              // Run the Effect synchronously since MCP handlers are async
-              (effect) => {
-                const { Effect } = require("effect") as typeof import("effect");
-                return Effect.runPromise(effect);
-              },
-            );
+            }),
+          );
 
           return {
             content: [
@@ -83,16 +79,13 @@ export function createReviewCommentMcpServer(
             .describe("New severity level"),
         },
         async (args) => {
-          await repository
-            .update({
+          await Effect.runPromise(
+            repository.update({
               id: args.id,
               ...(args.body !== undefined ? { body: args.body } : {}),
               ...(args.severity !== undefined ? { severity: args.severity } : {}),
-            })
-            .pipe((effect) => {
-              const { Effect } = require("effect") as typeof import("effect");
-              return Effect.runPromise(effect);
-            });
+            }),
+          );
 
           return {
             content: [
@@ -110,12 +103,7 @@ export function createReviewCommentMcpServer(
         "List all review comments made so far in this review session. Shows file, line, severity, and body for each comment.",
         {},
         async () => {
-          const comments = await repository
-            .listByThreadId({ threadId: threadId as any })
-            .pipe((effect) => {
-              const { Effect } = require("effect") as typeof import("effect");
-              return Effect.runPromise(effect);
-            });
+          const comments = await Effect.runPromise(repository.listByThreadId({ threadId }));
 
           if (comments.length === 0) {
             return {

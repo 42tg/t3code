@@ -150,7 +150,7 @@ export interface ClaudeCodeAdapterLiveOptions {
   }) => ClaudeQueryRuntime;
   readonly nativeEventLogPath?: string;
   readonly nativeEventLogger?: EventNdjsonLogger;
-  readonly reviewCommentRepository?: ReviewCommentRepositoryShape;
+  readonly reviewCommentRepository: ReviewCommentRepositoryShape;
 }
 
 function isUuid(value: string): boolean {
@@ -505,9 +505,9 @@ function sdkNativeItemId(message: SDKMessage): string | undefined {
   return undefined;
 }
 
-function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
+function makeClaudeCodeAdapter(options: ClaudeCodeAdapterLiveOptions) {
   return Effect.gen(function* () {
-    const reviewCommentRepo = options?.reviewCommentRepository;
+    const reviewCommentRepo = options.reviewCommentRepository;
 
     const nativeEventLogger =
       options?.nativeEventLogger ??
@@ -1871,9 +1871,7 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
         const use1MBeta = modelOptions?.largeContext === true && contextWindowMode === "1m-beta";
 
         // Register review comment MCP tools for this session
-        const reviewCommentMcpServer = reviewCommentRepo
-          ? createReviewCommentMcpServer(threadId, reviewCommentRepo)
-          : undefined;
+        const reviewCommentMcpServer = createReviewCommentMcpServer(threadId, reviewCommentRepo);
 
         const queryOptions: ClaudeQueryOptions = {
           ...(input.cwd ? { cwd: input.cwd } : {}),
@@ -1897,9 +1895,7 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
           env: process.env,
           ...(input.cwd ? { additionalDirectories: [input.cwd] } : {}),
           ...(sdkPlugins.length > 0 ? { plugins: sdkPlugins } : {}),
-          ...(reviewCommentMcpServer
-            ? { mcpServers: { "review-comments": reviewCommentMcpServer } }
-            : {}),
+          mcpServers: { "review-comments": reviewCommentMcpServer },
         };
 
         const queryRuntime = yield* Effect.try({
@@ -2212,8 +2208,6 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
   });
 }
 
-export const ClaudeCodeAdapterLive = Layer.effect(ClaudeCodeAdapter, makeClaudeCodeAdapter());
-
-export function makeClaudeCodeAdapterLive(options?: ClaudeCodeAdapterLiveOptions) {
+export function makeClaudeCodeAdapterLive(options: ClaudeCodeAdapterLiveOptions) {
   return Layer.effect(ClaudeCodeAdapter, makeClaudeCodeAdapter(options));
 }

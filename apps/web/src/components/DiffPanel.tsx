@@ -1,6 +1,10 @@
 import { parsePatchFiles } from "@pierre/diffs";
 import { buildLineAnnotations, renderReviewAnnotation } from "./DiffFileReviewComments";
-import { reviewCommentListQueryOptions } from "../lib/reviewCommentReactQuery";
+import {
+  reviewCommentListQueryOptions,
+  REVIEW_COMMENT_POLL_INTERVAL_ACTIVE,
+} from "../lib/reviewCommentReactQuery";
+import { buildSyntheticContextPatch } from "../lib/prReviewUtils";
 import { FileDiff, type FileDiffMetadata, Virtualizer } from "@pierre/diffs/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
@@ -142,8 +146,6 @@ function AnnotatedFileContextView({
   isCollapsed: boolean;
   onToggleCollapsed: () => void;
 }) {
-  const CONTEXT_PADDING = 10;
-
   const fileContentQuery = useQuery({
     queryKey: ["projects", "readFile", cwd, file] as const,
     queryFn: async () => {
@@ -158,35 +160,8 @@ function AnnotatedFileContextView({
   const syntheticPatch = useMemo(() => {
     if (!fileContentQuery.data) return null;
     const allLines = fileContentQuery.data.content.split("\n");
-    const totalLines = allLines.length;
-
-    // Build merged ranges from comments (±CONTEXT_PADDING), collapsing overlaps
-    const rawRanges = comments
-      .map((c) => ({
-        start: Math.max(1, c.startLine - CONTEXT_PADDING),
-        end: Math.min(totalLines, (c.endLine ?? c.startLine) + CONTEXT_PADDING),
-      }))
-      .toSorted((a, b) => a.start - b.start);
-
-    const merged: { start: number; end: number }[] = [];
-    for (const r of rawRanges) {
-      const last = merged[merged.length - 1];
-      if (last && r.start <= last.end + 1) {
-        last.end = Math.max(last.end, r.end);
-      } else {
-        merged.push({ ...r });
-      }
-    }
-
-    // Build unified diff with one hunk per merged range
-    const hunks = merged.map((range) => {
-      const count = range.end - range.start + 1;
-      const hunkHeader = `@@ -${range.start},${count} +${range.start},${count} @@`;
-      const hunkLines = allLines.slice(range.start - 1, range.end).map((l: string) => ` ${l}`);
-      return `${hunkHeader}\n${hunkLines.join("\n")}`;
-    });
-
-    return `--- a/${file}\n+++ b/${file}\n${hunks.join("\n")}\n`;
+    const patch = buildSyntheticContextPatch(file, comments, allLines);
+    return patch.length > 0 ? patch : null;
   }, [fileContentQuery.data, file, comments]);
 
   const fileDiff = useMemo(() => {
@@ -289,8 +264,6 @@ function UnmatchedCommentsContextView({
   resolvedTheme: DiffThemeType;
   diffRenderMode: DiffRenderMode;
 }) {
-  const CONTEXT_PADDING = 10;
-
   // Collect all line numbers visible in the diff hunks
   const visibleLines = useMemo(() => {
     const lines = new Set<number>();
@@ -322,34 +295,8 @@ function UnmatchedCommentsContextView({
   const syntheticFileDiff = useMemo(() => {
     if (!fileContentQuery.data || unmatched.length === 0) return null;
     const allLines = fileContentQuery.data.content.split("\n");
-    const totalLines = allLines.length;
-
-    // Build merged ranges from unmatched comments
-    const rawRanges = unmatched
-      .map((c) => ({
-        start: Math.max(1, c.startLine - CONTEXT_PADDING),
-        end: Math.min(totalLines, (c.endLine ?? c.startLine) + CONTEXT_PADDING),
-      }))
-      .toSorted((a, b) => a.start - b.start);
-
-    const merged: { start: number; end: number }[] = [];
-    for (const r of rawRanges) {
-      const last = merged[merged.length - 1];
-      if (last && r.start <= last.end + 1) {
-        last.end = Math.max(last.end, r.end);
-      } else {
-        merged.push({ ...r });
-      }
-    }
-
-    const hunks = merged.map((range) => {
-      const count = range.end - range.start + 1;
-      const hunkHeader = `@@ -${range.start},${count} +${range.start},${count} @@`;
-      const hunkLines = allLines.slice(range.start - 1, range.end).map((l: string) => ` ${l}`);
-      return `${hunkHeader}\n${hunkLines.join("\n")}`;
-    });
-
-    const patch = `--- a/${file}\n+++ b/${file}\n${hunks.join("\n")}\n`;
+    const patch = buildSyntheticContextPatch(file, unmatched, allLines);
+    if (patch.length === 0) return null;
     try {
       const parsed = parsePatchFiles(patch, `unmatched-context:${file}`);
       return parsed.flatMap((p) => p.files)[0] ?? null;
@@ -588,7 +535,13 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
     activeProjectId ? store.projects.find((project) => project.id === activeProjectId) : undefined,
   );
   const activeCwd = activeThread?.worktreePath ?? activeProject?.cwd;
-  const reviewCommentsQuery = useQuery(reviewCommentListQueryOptions(activeThreadId));
+  const isAgentActive = activeThread?.session?.orchestrationStatus === "running";
+  const reviewCommentsQuery = useQuery(
+    reviewCommentListQueryOptions(
+      activeThreadId,
+      isAgentActive ? REVIEW_COMMENT_POLL_INTERVAL_ACTIVE : false,
+    ),
+  );
   const reviewCommentsByFile = useMemo(() => {
     const comments = reviewCommentsQuery.data?.comments;
     if (!comments || comments.length === 0) return undefined;

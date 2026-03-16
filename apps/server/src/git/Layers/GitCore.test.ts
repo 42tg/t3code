@@ -118,6 +118,8 @@ const makeIsolatedGitCore = (gitService: GitServiceShape) =>
       listLocalBranchNames: (cwd) => core.listLocalBranchNames(cwd),
       diffBranch: (input) => core.diffBranch(input),
       diffWorkingTree: (input) => core.diffWorkingTree(input),
+      getRepoRoot: (cwd) => core.getRepoRoot(cwd),
+      resolveRef: (cwd, ref) => core.resolveRef(cwd, ref),
     } satisfies GitCoreShape;
   });
 
