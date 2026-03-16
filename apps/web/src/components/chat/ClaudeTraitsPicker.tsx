@@ -15,12 +15,10 @@ export const ClaudeTraitsPicker = memo(function ClaudeTraitsPicker(props: {
 
   const triggerLabel =
     props.contextWindowMode === "1m-native"
-      ? "1M ctx"
+      ? "1M"
       : props.contextWindowMode === "1m-beta" && props.largeContextEnabled
-        ? "1M ctx"
-        : props.contextWindowMode === "200k"
-          ? "200k ctx"
-          : "200k ctx";
+        ? "1M"
+        : "200k";
 
   if (!hasSelection) {
     return (
