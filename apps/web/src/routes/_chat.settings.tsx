@@ -439,6 +439,52 @@ function SettingsRouteView() {
 
             <section className="rounded-2xl border border-border bg-card p-5">
               <div className="mb-4">
+                <h2 className="text-sm font-medium text-foreground">Projects</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Configure default directories for project management.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <label htmlFor="projects-working-directory" className="block space-y-1">
+                  <span className="text-xs font-medium text-foreground">
+                    Default clone directory
+                  </span>
+                  <Input
+                    id="projects-working-directory"
+                    value={settings.projectsWorkingDirectory}
+                    onChange={(event) =>
+                      updateSettings({ projectsWorkingDirectory: event.target.value })
+                    }
+                    placeholder="~/Projects"
+                    spellCheck={false}
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    When reviewing a PR for a repo not yet added as a project, it will be cloned
+                    into this directory.
+                  </span>
+                </label>
+
+                {settings.projectsWorkingDirectory !== defaults.projectsWorkingDirectory ? (
+                  <div className="flex justify-end">
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      onClick={() =>
+                        updateSettings({
+                          projectsWorkingDirectory: defaults.projectsWorkingDirectory,
+                        })
+                      }
+                    >
+                      Restore default
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-border bg-card p-5">
+              <div className="mb-4">
                 <h2 className="text-sm font-medium text-foreground">Models</h2>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Save additional provider model slugs so they appear in the chat model picker and

@@ -906,6 +906,17 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         return yield* Effect.scoped(git.checkoutBranch(body));
       }
 
+      case WS_METHODS.gitCloneRepo: {
+        const body = stripRequestTag(request.body);
+        return yield* git.cloneRepo(body);
+      }
+
+      case WS_METHODS.gitSetBranchUpstream: {
+        const body = stripRequestTag(request.body);
+        yield* git.setBranchUpstream(body);
+        return {};
+      }
+
       case WS_METHODS.gitInit: {
         const body = stripRequestTag(request.body);
         return yield* git.initRepo(body);

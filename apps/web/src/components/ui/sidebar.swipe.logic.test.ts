@@ -11,9 +11,9 @@ describe("resolveSwipeGestureState", () => {
   describe("terminal states pass through unchanged", () => {
     it("returns swiping unchanged when already swiping", () => {
       // Any delta — even one that would cancel — should not override a committed state
-      expect(
-        resolveSwipeGestureState("swiping", { dx: 0, dy: SCROLL_CANCEL_PX + 1 }),
-      ).toBe("swiping");
+      expect(resolveSwipeGestureState("swiping", { dx: 0, dy: SCROLL_CANCEL_PX + 1 })).toBe(
+        "swiping",
+      );
     });
 
     it("returns cancelled unchanged when already cancelled", () => {
@@ -29,16 +29,14 @@ describe("resolveSwipeGestureState", () => {
 
   describe("scroll cancellation", () => {
     it("cancels when vertical movement exceeds SCROLL_CANCEL_PX", () => {
-      expect(
-        resolveSwipeGestureState("idle", { dx: 0, dy: SCROLL_CANCEL_PX + 1 }),
-      ).toBe("cancelled");
+      expect(resolveSwipeGestureState("idle", { dx: 0, dy: SCROLL_CANCEL_PX + 1 })).toBe(
+        "cancelled",
+      );
     });
 
     it("does not cancel when vertical movement is exactly at SCROLL_CANCEL_PX", () => {
       // Rule uses strict >, so equality stays idle
-      expect(
-        resolveSwipeGestureState("idle", { dx: 0, dy: SCROLL_CANCEL_PX }),
-      ).toBe("idle");
+      expect(resolveSwipeGestureState("idle", { dx: 0, dy: SCROLL_CANCEL_PX })).toBe("idle");
     });
 
     it("cancels even when horizontal movement would otherwise qualify for lock-in", () => {
@@ -61,9 +59,7 @@ describe("resolveSwipeGestureState", () => {
 
     it("does not lock in when horizontal is exactly at SWIPE_LOCK_PX", () => {
       // Rule uses strict >, so equality stays idle
-      expect(
-        resolveSwipeGestureState("idle", { dx: SWIPE_LOCK_PX, dy: 0 }),
-      ).toBe("idle");
+      expect(resolveSwipeGestureState("idle", { dx: SWIPE_LOCK_PX, dy: 0 })).toBe("idle");
     });
 
     it("does not lock in when horizontal is not 2x the vertical", () => {
@@ -77,24 +73,18 @@ describe("resolveSwipeGestureState", () => {
 
     it("does not lock in when only the axis ratio is met but distance is insufficient", () => {
       // dx=10 satisfies ratio (dy=4, 10 > 4*2=8) but dx(10) is NOT > SWIPE_LOCK_PX(20)
-      expect(
-        resolveSwipeGestureState("idle", { dx: 10, dy: 4 }),
-      ).toBe("idle");
+      expect(resolveSwipeGestureState("idle", { dx: 10, dy: 4 })).toBe("idle");
     });
   });
 
   describe("idle state", () => {
     it("stays idle for small diagonal movement", () => {
       // Both dx and dy are small — well under all thresholds
-      expect(
-        resolveSwipeGestureState("idle", { dx: 5, dy: 3 }),
-      ).toBe("idle");
+      expect(resolveSwipeGestureState("idle", { dx: 5, dy: 3 })).toBe("idle");
     });
 
     it("stays idle at zero delta", () => {
-      expect(
-        resolveSwipeGestureState("idle", { dx: 0, dy: 0 }),
-      ).toBe("idle");
+      expect(resolveSwipeGestureState("idle", { dx: 0, dy: 0 })).toBe("idle");
     });
   });
 });

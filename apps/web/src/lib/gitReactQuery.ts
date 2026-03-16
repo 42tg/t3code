@@ -224,6 +224,16 @@ export function gitCreateWorktreeMutationOptions(input: { queryClient: QueryClie
   });
 }
 
+export function gitCloneRepoMutationOptions() {
+  return mutationOptions({
+    mutationKey: ["git", "mutation", "clone-repo"] as const,
+    mutationFn: async ({ url, targetDir }: { url: string; targetDir: string }) => {
+      const api = ensureNativeApi();
+      return api.git.cloneRepo({ url, targetDir });
+    },
+  });
+}
+
 export function gitFetchPrDetailsMutationOptions() {
   return mutationOptions({
     mutationKey: ["git", "mutation", "fetch-pr-details"] as const,

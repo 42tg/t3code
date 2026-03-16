@@ -156,6 +156,8 @@ export function createWsNativeApi(): NativeApi {
       createBranch: (input) => transport.request(WS_METHODS.gitCreateBranch, input),
       checkout: (input) => transport.request(WS_METHODS.gitCheckout, input),
       init: (input) => transport.request(WS_METHODS.gitInit, input),
+      cloneRepo: (input) => transport.request(WS_METHODS.gitCloneRepo, input),
+      setBranchUpstream: (input) => transport.request(WS_METHODS.gitSetBranchUpstream, input),
       fetchPrDetails: (input) => transport.request(WS_METHODS.gitFetchPrDetails, input),
       resolvePullRequest: (input) => transport.request(WS_METHODS.gitResolvePullRequest, input),
       preparePullRequestThread: (input) =>

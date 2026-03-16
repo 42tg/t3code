@@ -1,5 +1,8 @@
 import type {
   GitCheckoutInput,
+  GitCloneRepoInput,
+  GitCloneRepoResult,
+  GitSetBranchUpstreamInput,
   GitCreateBranchInput,
   GitPreparePullRequestThreadInput,
   GitPreparePullRequestThreadResult,
@@ -178,6 +181,9 @@ export interface NativeApi {
     // Diff API
     diffBranch: (input: GitDiffBranchInput) => Promise<GitDiffBranchResult>;
     diffWorkingTree: (input: GitDiffWorkingTreeInput) => Promise<GitDiffBranchResult>;
+    // Clone API
+    cloneRepo: (input: GitCloneRepoInput) => Promise<GitCloneRepoResult>;
+    setBranchUpstream: (input: GitSetBranchUpstreamInput) => Promise<void>;
     // GitHub PR API
     fetchPrDetails: (input: GitFetchPrDetailsInput) => Promise<GitFetchPrDetailsResult>;
     listOpenPrs: (input: GitListOpenPrsInput) => Promise<GitListOpenPrsResult>;

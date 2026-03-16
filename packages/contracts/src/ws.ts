@@ -13,6 +13,8 @@ import {
 } from "./orchestration";
 import {
   GitCheckoutInput,
+  GitCloneRepoInput,
+  GitSetBranchUpstreamInput,
   GitCreateBranchInput,
   GitDiffBranchInput,
   GitDiffWorkingTreeInput,
@@ -82,6 +84,8 @@ export const WS_METHODS = {
   gitDiffBranch: "git.diffBranch",
   gitDiffWorkingTree: "git.diffWorkingTree",
   gitListOpenPrs: "git.listOpenPrs",
+  gitCloneRepo: "git.cloneRepo",
+  gitSetBranchUpstream: "git.setBranchUpstream",
 
   // Jira methods
   jiraIsConfigured: "jira.isConfigured",
@@ -162,6 +166,8 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.gitDiffBranch, GitDiffBranchInput),
   tagRequestBody(WS_METHODS.gitDiffWorkingTree, GitDiffWorkingTreeInput),
   tagRequestBody(WS_METHODS.gitListOpenPrs, GitListOpenPrsInput),
+  tagRequestBody(WS_METHODS.gitCloneRepo, GitCloneRepoInput),
+  tagRequestBody(WS_METHODS.gitSetBranchUpstream, GitSetBranchUpstreamInput),
 
   // Jira methods
   tagRequestBody(WS_METHODS.jiraIsConfigured, Schema.Struct({})),

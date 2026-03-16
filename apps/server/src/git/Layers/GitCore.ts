@@ -1272,10 +1272,42 @@ const makeGitCore = Effect.gen(function* () {
       "--set-upstream-to",
       `${input.remoteName}/${input.remoteBranch}`,
       input.branch,
-    ]);
+    ]).pipe(
+      // Fallback: if --set-upstream-to fails (remote ref not fetched yet),
+      // set the tracking config directly via git config.
+      Effect.catch(() =>
+        Effect.gen(function* () {
+          const configPrefix = `branch.${input.branch}`;
+          yield* runGit("GitCore.setBranchUpstream.configRemote", input.cwd, [
+            "config",
+            configPrefix + ".remote",
+            input.remoteName,
+          ]);
+          yield* runGit("GitCore.setBranchUpstream.configMerge", input.cwd, [
+            "config",
+            configPrefix + ".merge",
+            `refs/heads/${input.remoteBranch}`,
+          ]);
+        }),
+      ),
+    );
 
   const removeWorktree: GitCoreShape["removeWorktree"] = (input) =>
     Effect.gen(function* () {
+      // Skip removal if the worktree directory no longer exists
+      const worktreeExists = yield* fileSystem.stat(input.path).pipe(
+        Effect.map(() => true),
+        Effect.catch(() => Effect.succeed(false)),
+      );
+      if (!worktreeExists) {
+        // Prune stale worktree entries so git doesn't keep a dangling ref
+        yield* executeGit("GitCore.removeWorktree.prune", input.cwd, ["worktree", "prune"], {
+          timeoutMs: 10_000,
+          allowNonZeroExit: true,
+        });
+        return;
+      }
+
       const args = ["worktree", "remove"];
       if (input.force) {
         args.push("--force");
@@ -1402,6 +1434,58 @@ const makeGitCore = Effect.gen(function* () {
       );
     });
 
+  const cloneRepo: GitCoreShape["cloneRepo"] = (input) =>
+    Effect.gen(function* () {
+      const repoName =
+        input.url
+          .split("/")
+          .pop()
+          ?.replace(/\.git$/, "") ?? "repo";
+      const clonedPath = path.join(input.targetDir, repoName);
+
+      // Ensure parent directory exists
+      const targetExists = yield* fileSystem.stat(input.targetDir).pipe(
+        Effect.map((stat) => stat.type === "Directory"),
+        Effect.catch(() => Effect.succeed(false)),
+      );
+      if (!targetExists) {
+        yield* fileSystem.makeDirectory(input.targetDir, { recursive: true }).pipe(
+          Effect.mapError(
+            (error) =>
+              new GitCommandError({
+                operation: "GitCore.cloneRepo.mkdir",
+                command: `mkdir -p ${input.targetDir}`,
+                cwd: input.targetDir,
+                detail: `Failed to create target directory: ${error.message}`,
+              }),
+          ),
+        );
+      }
+
+      // Check if the directory already exists and is a git repo
+      const dirExists = yield* fileSystem.stat(clonedPath).pipe(
+        Effect.map((stat) => stat.type === "Directory"),
+        Effect.catch(() => Effect.succeed(false)),
+      );
+      if (dirExists) {
+        const isGitRepo = yield* executeGit(
+          "GitCore.cloneRepo.check",
+          clonedPath,
+          ["rev-parse", "--git-dir"],
+          { allowNonZeroExit: true, timeoutMs: 5_000 },
+        );
+        if (isGitRepo.code === 0) {
+          return { clonedPath, alreadyExisted: true as const };
+        }
+      }
+
+      yield* executeGit("GitCore.cloneRepo", input.targetDir, ["clone", input.url], {
+        timeoutMs: 300_000,
+        fallbackErrorMessage: "git clone failed",
+      });
+      return { clonedPath, alreadyExisted: false as const };
+    });
+
   const initRepo: GitCoreShape["initRepo"] = (input) =>
     executeGit("GitCore.initRepo", input.cwd, ["init"], {
       timeoutMs: 10_000,
@@ -1451,6 +1535,7 @@ const makeGitCore = Effect.gen(function* () {
     renameBranch,
     createBranch,
     checkoutBranch,
+    cloneRepo,
     initRepo,
     listLocalBranchNames,
     diffBranch,

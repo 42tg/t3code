@@ -11,6 +11,7 @@ import {
   TerminalIcon,
   TriangleAlertIcon,
 } from "lucide-react";
+import { gitRemoteOriginToGitHubUrl } from "@t3tools/shared/git";
 import { ClaudeAI, CursorIcon, GitHubIcon, JiraIcon, OpenAI } from "./Icons";
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import {
@@ -87,7 +88,7 @@ import { useThreadSelectionStore } from "../threadSelectionStore";
 import { formatWorktreePathForDisplay, getOrphanedWorktreePathForThread } from "../worktreeCleanup";
 import { isNonEmpty as isNonEmptyString } from "effect/String";
 import { Dialog, DialogPopup } from "./ui/dialog";
-import ReviewPrDialog from "./ReviewPrDialog";
+import StandaloneReviewPrDialog from "./StandaloneReviewPrDialog";
 import {
   resolveSidebarNewThreadEnvMode,
   resolveThreadRowClassName,
@@ -110,17 +111,6 @@ async function copyTextToClipboard(text: string): Promise<void> {
     throw new Error("Clipboard API unavailable.");
   }
   await navigator.clipboard.writeText(text);
-}
-
-function gitRemoteOriginToGitHubUrl(originUrl: string | null): string | null {
-  if (!originUrl) return null;
-  const trimmed = originUrl.trim();
-  const match =
-    /^(?:git@github\.com:|ssh:\/\/git@github\.com\/|https:\/\/github\.com\/|git:\/\/github\.com\/)([^/\s]+\/[^/\s]+?)(?:\.git)?\/?$/i.exec(
-      trimmed,
-    );
-  const nameWithOwner = match?.[1]?.trim();
-  return nameWithOwner ? `https://github.com/${nameWithOwner}` : null;
 }
 
 function formatRelativeTime(iso: string): string {
@@ -286,7 +276,6 @@ function ProjectActionButtons({
   isMobile,
   newThreadShortcutLabel,
   onOpenGitHub,
-  onReviewPr,
   onNewThread,
 }: {
   project: { id: ProjectId; name: string };
@@ -294,7 +283,6 @@ function ProjectActionButtons({
   isMobile: boolean;
   newThreadShortcutLabel: string | null;
   onOpenGitHub: (url: string) => void;
-  onReviewPr: () => void;
   onNewThread: () => void;
 }) {
   const buttonClass = isMobile
@@ -325,25 +313,6 @@ function ProjectActionButtons({
           <TooltipPopup side="top">Open on GitHub</TooltipPopup>
         </Tooltip>
       )}
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <button
-              type="button"
-              aria-label={`Review PR in ${project.name}`}
-              className={buttonClass}
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                onReviewPr();
-              }}
-            >
-              <GitPullRequestIcon className={iconClass} />
-            </button>
-          }
-        />
-        <TooltipPopup side="top">Review PR</TooltipPopup>
-      </Tooltip>
       <Tooltip>
         <TooltipTrigger
           render={
@@ -448,10 +417,7 @@ export default function Sidebar() {
   const dragInProgressRef = useRef(false);
   const suppressProjectClickAfterDragRef = useRef(false);
   const [desktopUpdateState, setDesktopUpdateState] = useState<DesktopUpdateState | null>(null);
-  const [reviewPrProjectId, setReviewPrProjectId] = useState<ProjectId | null>(null);
-  const reviewPrProject = reviewPrProjectId
-    ? projects.find((p) => p.id === reviewPrProjectId)
-    : null;
+  const [standaloneReviewOpen, setStandaloneReviewOpen] = useState(false);
   const selectedThreadIds = useThreadSelectionStore((s) => s.selectedThreadIds);
   const toggleThreadSelection = useThreadSelectionStore((s) => s.toggleThread);
   const rangeSelectTo = useThreadSelectionStore((s) => s.rangeSelectTo);
@@ -1046,7 +1012,6 @@ export default function Sidebar() {
       const clicked = await api.contextMenu.show(
         [
           { id: "copy-path", label: "Copy Workspace Path" },
-          { id: "review-pr", label: "Review PR" },
           { id: "delete", label: "Remove project", destructive: true },
         ],
         position,
@@ -1065,11 +1030,6 @@ export default function Sidebar() {
         } catch {
           toastManager.add({ type: "error", title: "Failed to copy workspace path" });
         }
-        return;
-      }
-
-      if (clicked === "review-pr") {
-        setReviewPrProjectId(projectId);
         return;
       }
 
@@ -1438,26 +1398,43 @@ export default function Sidebar() {
             <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
               Projects
             </span>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <button
-                    type="button"
-                    aria-label="Add project"
-                    aria-pressed={shouldShowProjectPathEntry}
-                    className="inline-flex size-5 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
-                    onClick={handleStartAddProject}
+            <div className="flex items-center gap-0.5">
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      aria-label="Review PR"
+                      className="inline-flex size-5 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
+                      onClick={() => setStandaloneReviewOpen(true)}
+                    />
+                  }
+                >
+                  <GitPullRequestIcon className="size-3.5" />
+                </TooltipTrigger>
+                <TooltipPopup side="right">Review PR</TooltipPopup>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      aria-label="Add project"
+                      aria-pressed={shouldShowProjectPathEntry}
+                      className="inline-flex size-5 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
+                      onClick={handleStartAddProject}
+                    />
+                  }
+                >
+                  <PlusIcon
+                    className={`size-3.5 transition-transform duration-150 ${
+                      shouldShowProjectPathEntry ? "rotate-45" : "rotate-0"
+                    }`}
                   />
-                }
-              >
-                <PlusIcon
-                  className={`size-3.5 transition-transform duration-150 ${
-                    shouldShowProjectPathEntry ? "rotate-45" : "rotate-0"
-                  }`}
-                />
-              </TooltipTrigger>
-              <TooltipPopup side="right">Add project</TooltipPopup>
-            </Tooltip>
+                </TooltipTrigger>
+                <TooltipPopup side="right">Add project</TooltipPopup>
+              </Tooltip>
+            </div>
           </div>
 
           {shouldShowProjectPathEntry && (
@@ -1599,7 +1576,6 @@ export default function Sidebar() {
                                     const api = readNativeApi();
                                     if (api) void api.shell.openExternal(url);
                                   }}
-                                  onReviewPr={() => setReviewPrProjectId(project.id)}
                                   onNewThread={() => {
                                     setOpenMobile(false);
                                     void handleNewThread(project.id, {
@@ -1621,7 +1597,6 @@ export default function Sidebar() {
                                     const api = readNativeApi();
                                     if (api) void api.shell.openExternal(url);
                                   }}
-                                  onReviewPr={() => setReviewPrProjectId(project.id)}
                                   onNewThread={() => {
                                     void handleNewThread(project.id, {
                                       envMode: resolveSidebarNewThreadEnvMode({
@@ -1921,20 +1896,19 @@ export default function Sidebar() {
       </SidebarFooter>
 
       <Dialog
-        open={reviewPrProject !== null}
+        open={standaloneReviewOpen}
         onOpenChange={(open) => {
-          if (!open) setReviewPrProjectId(null);
+          if (!open) setStandaloneReviewOpen(false);
         }}
       >
-        {reviewPrProject && (
-          <DialogPopup>
-            <ReviewPrDialog
-              projectId={reviewPrProject.id}
-              projectCwd={reviewPrProject.cwd}
-              onClose={() => setReviewPrProjectId(null)}
-            />
-          </DialogPopup>
-        )}
+        <DialogPopup>
+          <StandaloneReviewPrDialog
+            githubUrlByProjectId={githubUrlByProjectId}
+            projects={projects}
+            projectsWorkingDirectory={appSettings.projectsWorkingDirectory}
+            onClose={() => setStandaloneReviewOpen(false)}
+          />
+        </DialogPopup>
       </Dialog>
     </>
   );

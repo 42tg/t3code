@@ -128,10 +128,30 @@ export const GitCheckoutInput = Schema.Struct({
 });
 export type GitCheckoutInput = typeof GitCheckoutInput.Type;
 
+export const GitSetBranchUpstreamInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+  branch: TrimmedNonEmptyStringSchema,
+  remoteName: TrimmedNonEmptyStringSchema,
+  remoteBranch: TrimmedNonEmptyStringSchema,
+});
+export type GitSetBranchUpstreamInput = typeof GitSetBranchUpstreamInput.Type;
+
 export const GitInitInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,
 });
 export type GitInitInput = typeof GitInitInput.Type;
+
+export const GitCloneRepoInput = Schema.Struct({
+  url: TrimmedNonEmptyStringSchema,
+  targetDir: TrimmedNonEmptyStringSchema,
+});
+export type GitCloneRepoInput = typeof GitCloneRepoInput.Type;
+
+export const GitCloneRepoResult = Schema.Struct({
+  clonedPath: TrimmedNonEmptyStringSchema,
+  alreadyExisted: Schema.Boolean,
+});
+export type GitCloneRepoResult = typeof GitCloneRepoResult.Type;
 
 export const GitFetchPrDetailsInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,

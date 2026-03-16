@@ -1,3 +1,28 @@
+const GITHUB_REMOTE_URL_REGEX =
+  /^(?:git@github\.com:|ssh:\/\/git@github\.com\/|https:\/\/github\.com\/|git:\/\/github\.com\/)([^/\s]+\/[^/\s]+?)(?:\.git)?\/?$/i;
+
+/**
+ * Normalize a Git remote origin URL (SSH, HTTPS, git://) to a canonical
+ * `https://github.com/owner/repo` URL. Returns `null` for non-GitHub remotes.
+ */
+export function gitRemoteOriginToGitHubUrl(originUrl: string | null): string | null {
+  if (!originUrl) return null;
+  const match = GITHUB_REMOTE_URL_REGEX.exec(originUrl.trim());
+  const nameWithOwner = match?.[1]?.trim();
+  return nameWithOwner ? `https://github.com/${nameWithOwner}` : null;
+}
+
+/**
+ * Extract the canonical repository URL (`https://github.com/owner/repo`)
+ * from a GitHub pull request URL like `https://github.com/owner/repo/pull/123`.
+ */
+export function extractGitHubRepoUrlFromPrUrl(prUrl: string): string | null {
+  const trimmed = prUrl.trim();
+  const match = /^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/\d+/.exec(trimmed);
+  const nameWithOwner = match?.[1]?.trim();
+  return nameWithOwner ? `https://github.com/${nameWithOwner}` : null;
+}
+
 /**
  * Sanitize an arbitrary string into a valid, lowercase git branch fragment.
  * Strips quotes, collapses separators, limits to 64 chars.

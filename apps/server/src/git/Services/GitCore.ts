@@ -210,6 +210,14 @@ export interface GitCoreShape {
   ) => Effect.Effect<void, GitCommandError, Scope.Scope>;
 
   /**
+   * Clone a repository into a target directory.
+   */
+  readonly cloneRepo: (input: {
+    url: string;
+    targetDir: string;
+  }) => Effect.Effect<{ clonedPath: string; alreadyExisted: boolean }, GitCommandError>;
+
+  /**
    * Initialize a repository in the provided directory.
    */
   readonly initRepo: (input: GitInitInput) => Effect.Effect<void, GitCommandError>;
