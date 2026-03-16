@@ -1,5 +1,5 @@
 import { parsePatchFiles } from "@pierre/diffs";
-import DiffFileReviewComments from "./DiffFileReviewComments";
+import { buildLineAnnotations, renderReviewAnnotation } from "./DiffFileReviewComments";
 import { reviewCommentListQueryOptions } from "../lib/reviewCommentReactQuery";
 import { FileDiff, type FileDiffMetadata, Virtualizer } from "@pierre/diffs/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -221,10 +221,15 @@ function DiffFileListView({
                       themeType: resolvedTheme as DiffThemeType,
                       unsafeCSS: DIFF_UNSAFE_CSS,
                     }}
+                    {...(commentLookup?.get(normalizedFilePath)
+                      ? {
+                          lineAnnotations: buildLineAnnotations(
+                            commentLookup.get(normalizedFilePath)!,
+                          ),
+                          renderAnnotation: renderReviewAnnotation,
+                        }
+                      : {})}
                   />
-                  {commentLookup?.get(normalizedFilePath)?.length ? (
-                    <DiffFileReviewComments comments={commentLookup.get(normalizedFilePath)!} />
-                  ) : null}
                 </div>
               )}
             </div>
