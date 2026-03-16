@@ -668,6 +668,10 @@ describe("isLatestTurnSettled", () => {
     ).toBe(true);
   });
 
+  it("returns true when no turn has ever started (new thread)", () => {
+    expect(isLatestTurnSettled(null, null)).toBe(true);
+  });
+
   it("returns false when turn timestamps are incomplete", () => {
     expect(
       isLatestTurnSettled(

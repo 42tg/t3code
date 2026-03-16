@@ -134,7 +134,9 @@ export function isLatestTurnSettled(
   latestTurn: LatestTurnTiming | null,
   session: SessionActivityState | null,
 ): boolean {
-  if (!latestTurn?.startedAt) return false;
+  // No turn has ever started — the thread is idle (e.g. brand-new chat)
+  if (!latestTurn) return true;
+  if (!latestTurn.startedAt) return false;
   if (!latestTurn.completedAt) return false;
   if (!session) return true;
   if (session.orchestrationStatus === "running") return false;
