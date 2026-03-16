@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import type { ComposerImageAttachment } from "../composerDraftStore";
 
 export interface QueuedMessage {
@@ -8,45 +8,67 @@ export interface QueuedMessage {
   queuedAt: string;
 }
 
-export function useMessageQueue() {
-  const [queue, setQueue] = useState<QueuedMessage[]>([]);
-  // Keep a ref in sync for synchronous access (state reads are batched)
-  const queueRef = useRef<QueuedMessage[]>([]);
+// Module-level store keyed by threadId so the queue survives component
+// unmount/remount when the user navigates between threads.
+const queuesByThread = new Map<string, QueuedMessage[]>();
+const listeners = new Set<() => void>();
 
-  const enqueue = useCallback((text: string, images: ComposerImageAttachment[]): string => {
-    const id = crypto.randomUUID();
-    const item: QueuedMessage = { id, text, images, queuedAt: new Date().toISOString() };
-    queueRef.current = [...queueRef.current, item];
-    setQueue(queueRef.current);
-    return id;
-  }, []);
+function getQueue(threadId: string): QueuedMessage[] {
+  return queuesByThread.get(threadId) ?? [];
+}
 
-  const popFirst = useCallback((): QueuedMessage | null => {
-    const first = queueRef.current[0] ?? null;
-    if (first) {
-      queueRef.current = queueRef.current.slice(1);
-      setQueue(queueRef.current);
-    }
-    return first;
-  }, []);
+function setQueue(threadId: string, next: QueuedMessage[]) {
+  if (next.length === 0) {
+    queuesByThread.delete(threadId);
+  } else {
+    queuesByThread.set(threadId, next);
+  }
+  for (const listener of listeners) listener();
+}
 
-  const removeById = useCallback((id: string) => {
-    queueRef.current = queueRef.current.filter((msg) => msg.id !== id);
-    setQueue(queueRef.current);
-  }, []);
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+export function useMessageQueue(threadId: string) {
+  const queue = useSyncExternalStore(
+    subscribe,
+    () => getQueue(threadId),
+    () => [],
+  );
+
+  const enqueue = useCallback(
+    (text: string, images: ComposerImageAttachment[]): string => {
+      const id = crypto.randomUUID();
+      const item: QueuedMessage = { id, text, images, queuedAt: new Date().toISOString() };
+      setQueue(threadId, [...getQueue(threadId), item]);
+      return id;
+    },
+    [threadId],
+  );
 
   const drainAll = useCallback((): QueuedMessage[] => {
-    const items = queueRef.current;
+    const items = getQueue(threadId);
     if (items.length === 0) return items;
-    queueRef.current = [];
-    setQueue([]);
+    setQueue(threadId, []);
     return items;
-  }, []);
+  }, [threadId]);
+
+  const removeById = useCallback(
+    (id: string) => {
+      const current = getQueue(threadId);
+      const next = current.filter((msg) => msg.id !== id);
+      if (next.length !== current.length) setQueue(threadId, next);
+    },
+    [threadId],
+  );
 
   const clearQueue = useCallback(() => {
-    queueRef.current = [];
-    setQueue([]);
-  }, []);
+    setQueue(threadId, []);
+  }, [threadId]);
 
-  return { queue, enqueue, popFirst, drainAll, removeById, clearQueue };
+  return { queue, enqueue, drainAll, removeById, clearQueue };
 }

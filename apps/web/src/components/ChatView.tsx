@@ -325,8 +325,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     enqueue: enqueueMessage,
     drainAll: drainAllQueuedMessages,
     removeById: removeQueuedMessage,
-    clearQueue: clearMessageQueue,
-  } = useMessageQueue();
+  } = useMessageQueue(threadId);
   const terminalOpenByThreadRef = useRef<Record<string, boolean>>({});
   const setMessagesScrollContainerRef = useCallback((element: HTMLDivElement | null) => {
     messagesScrollRef.current = element;
@@ -2582,12 +2581,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
 
     void onSendRef.current(undefined, { text: mergedText, images: mergedImages });
   }, [latestTurnSettled, messageQueue, isSendBusy, drainAllQueuedMessages]);
-
-  // Clear the queue when the user switches threads
-  useEffect(() => {
-    clearMessageQueue();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [threadId]);
 
   const onInterrupt = async () => {
     const api = readNativeApi();
