@@ -150,12 +150,6 @@ function DiffFileListView({
     return map;
   }, [reviewCommentsByFile]);
 
-  // Collect all review comments for a standalone summary
-  const allReviewComments = useMemo(() => {
-    if (!reviewCommentsByFile) return [];
-    return [...reviewCommentsByFile.values()].flat();
-  }, [reviewCommentsByFile]);
-
   return (
     <div
       ref={patchViewportRef}
@@ -165,16 +159,6 @@ function DiffFileListView({
         className="diff-render-surface h-full min-h-0 overflow-auto px-2 pb-2"
         config={{ overscrollSize: 600, intersectionObserverMargin: 1200 }}
       >
-        {allReviewComments.length > 0 && (
-          <div className="mt-2 mb-2 rounded-md border border-border bg-card p-3">
-            <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/60">
-              Review comments ({allReviewComments.length})
-            </p>
-            {[...(reviewCommentsByFile?.entries() ?? [])].map(([file, comments]) => (
-              <DiffFileReviewComments key={file} comments={comments} />
-            ))}
-          </div>
-        )}
         {files.map((fileDiff) => {
           const filePath = resolveFileDiffPath(fileDiff);
           const normalizedFilePath = normalizeCommentPath(filePath);
