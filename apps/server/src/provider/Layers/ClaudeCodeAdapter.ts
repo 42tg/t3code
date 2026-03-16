@@ -47,10 +47,7 @@ import {
 } from "../Errors.ts";
 import { resolveEnabledPlugins } from "@t3tools/shared/claude-plugins";
 import { getClaudeContextWindowMode } from "@t3tools/shared/model";
-import {
-  ReviewCommentRepository,
-  type ReviewCommentRepositoryShape,
-} from "../../persistence/Services/ReviewCommentRepository.ts";
+import { type ReviewCommentRepositoryShape } from "../../persistence/Services/ReviewCommentRepository.ts";
 import { createReviewCommentMcpServer } from "../reviewCommentTools.ts";
 import { ClaudeCodeAdapter, type ClaudeCodeAdapterShape } from "../Services/ClaudeCodeAdapter.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";

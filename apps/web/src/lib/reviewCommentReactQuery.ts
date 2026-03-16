@@ -24,6 +24,7 @@ export function reviewCommentListQueryOptions(threadId: ThreadId | null) {
     enabled: threadId !== null,
     staleTime: REVIEW_COMMENTS_STALE_TIME_MS,
     refetchOnWindowFocus: true,
+    refetchInterval: 3_000,
   });
 }
 
