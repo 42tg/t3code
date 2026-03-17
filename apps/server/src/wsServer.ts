@@ -1149,7 +1149,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         const ghComments = comments.map((c) => ({
           path: c.file,
           line: c.startLine,
-          body: `**[${c.severity.toUpperCase()}]** ${c.body}`,
+          body: c.body,
         }));
 
         // Get the PR head SHA from GitHub API instead of the local worktree
