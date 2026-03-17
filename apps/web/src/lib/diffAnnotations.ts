@@ -27,6 +27,8 @@ export interface ReviewCommentAnnotation {
   startLine: number;
   endLine?: number | undefined;
   data: ReviewComment;
+  /** Optional callback to publish this single comment to GitHub. */
+  onPublish?: ((comment: ReviewComment) => Promise<void>) | undefined;
 }
 
 // ── Path helpers ─────────────────────────────────────────────────────
@@ -43,7 +45,10 @@ export function normalizeFilePath(path: string): string {
 // ── Conversion helpers ───────────────────────────────────────────────
 
 /** Convert a flat list of review comments into generic DiffAnnotations. */
-export function reviewCommentsToAnnotations(comments: readonly ReviewComment[]): DiffAnnotation[] {
+export function reviewCommentsToAnnotations(
+  comments: readonly ReviewComment[],
+  onPublish?: (comment: ReviewComment) => Promise<void>,
+): DiffAnnotation[] {
   return comments.map((c) => ({
     kind: "review-comment" as const,
     id: c.id,
@@ -51,6 +56,7 @@ export function reviewCommentsToAnnotations(comments: readonly ReviewComment[]):
     startLine: c.startLine,
     endLine: c.endLine,
     data: c,
+    onPublish,
   }));
 }
 

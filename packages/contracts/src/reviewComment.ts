@@ -50,6 +50,7 @@ export const ReviewCommentPublishInput = Schema.Struct({
   threadId: ThreadId,
   cwd: TrimmedNonEmptyString,
   prUrl: TrimmedNonEmptyString,
+  commentId: Schema.optional(TrimmedNonEmptyString),
 });
 export type ReviewCommentPublishInput = typeof ReviewCommentPublishInput.Type;
 

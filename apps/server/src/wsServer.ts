@@ -1126,9 +1126,12 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
 
       case WS_METHODS.reviewCommentPublish: {
         const body = stripRequestTag(request.body);
-        const comments = yield* reviewCommentRepo.listByThreadId({
+        const allComments = yield* reviewCommentRepo.listByThreadId({
           threadId: body.threadId,
         });
+        const comments = body.commentId
+          ? allComments.filter((c) => c.id === body.commentId)
+          : [...allComments];
 
         if (comments.length === 0) {
           return { published: 0 };

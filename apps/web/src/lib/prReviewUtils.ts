@@ -49,6 +49,8 @@ export function buildReviewPrompt(pr: GitFetchPrDetailsResult): string {
     "",
     "Review the changes in this PR. Focus on correctness, performance, and potential issues.",
     "",
+    "**Important:** Before starting, check if you have any code-review skills available (e.g. via `/find-skills code review` or check your available skills list). If a review skill is available, use it to guide your review process.",
+    "",
     "You have review comment tools available:",
     "- `review_comment` — add a structured comment on a specific file:line",
     "- `update_review_comment` — update an existing comment by ID",

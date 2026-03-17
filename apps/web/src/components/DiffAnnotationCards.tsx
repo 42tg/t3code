@@ -6,10 +6,20 @@
  * `@pierre/diffs` `FileDiff.renderAnnotation`.
  */
 
+import { useState } from "react";
 import type { DiffLineAnnotation } from "@pierre/diffs";
 import type { ReviewComment } from "@t3tools/contracts";
-import { AlertCircleIcon, InfoIcon, LightbulbIcon, OctagonAlertIcon } from "lucide-react";
+import {
+  AlertCircleIcon,
+  ExternalLinkIcon,
+  InfoIcon,
+  LightbulbIcon,
+  LoaderIcon,
+  OctagonAlertIcon,
+} from "lucide-react";
 import type { DiffAnnotation } from "../lib/diffAnnotations";
+import { ensureNativeApi } from "../nativeApi";
+import { toastManager } from "./ui/toast";
 
 // ── Review comment severity config ──────────────────────────────────
 
@@ -46,9 +56,35 @@ const SEVERITY_CONFIG = {
 
 // ── Review comment card ─────────────────────────────────────────────
 
-function ReviewCommentInlineCard({ comment }: { comment: ReviewComment }) {
+function ReviewCommentInlineCard({
+  comment,
+  onPublish,
+}: {
+  comment: ReviewComment;
+  onPublish?: ((comment: ReviewComment) => Promise<void>) | undefined;
+}) {
   const config = SEVERITY_CONFIG[comment.severity];
   const Icon = config.icon;
+  const [publishing, setPublishing] = useState(false);
+  const [published, setPublished] = useState(false);
+
+  const handlePublish = async () => {
+    if (!onPublish || publishing || published) return;
+    setPublishing(true);
+    try {
+      await onPublish(comment);
+      setPublished(true);
+      toastManager.add({ type: "success", title: "Comment published to GitHub" });
+    } catch (err) {
+      toastManager.add({
+        type: "error",
+        title: "Failed to publish",
+        description: err instanceof Error ? err.message : "An error occurred.",
+      });
+    } finally {
+      setPublishing(false);
+    }
+  };
 
   return (
     <div
@@ -70,6 +106,26 @@ function ReviewCommentInlineCard({ comment }: { comment: ReviewComment }) {
             >
               {config.label}
             </span>
+            {onPublish && (
+              <button
+                type="button"
+                className={`ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
+                  published
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-muted-foreground/60 hover:bg-accent hover:text-foreground"
+                }`}
+                onClick={() => void handlePublish()}
+                disabled={publishing || published}
+                title={published ? "Published to GitHub" : "Publish this comment to GitHub"}
+              >
+                {publishing ? (
+                  <LoaderIcon className="size-3 animate-spin" />
+                ) : (
+                  <ExternalLinkIcon className="size-3" />
+                )}
+                {published ? "Published" : "Publish"}
+              </button>
+            )}
           </div>
           <p className="mt-1 text-xs leading-relaxed text-foreground/90 whitespace-pre-wrap">
             {comment.body}
@@ -97,7 +153,7 @@ export function renderDiffAnnotation(
 
   switch (meta.kind) {
     case "review-comment":
-      return <ReviewCommentInlineCard comment={meta.data} />;
+      return <ReviewCommentInlineCard comment={meta.data} onPublish={meta.onPublish} />;
     default:
       return null;
   }

@@ -164,7 +164,12 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
 
   // ── Annotations (source-agnostic) ──────────────────────────────────
   const isAgentActive = activeThread?.session?.orchestrationStatus === "running";
-  const annotations = useDiffAnnotations(activeThreadId, isAgentActive);
+  const prUrl = useQuery(gitStatusQueryOptions(activeCwd ?? null)).data?.pr?.url ?? null;
+  const publishContext = useMemo(
+    () => (activeCwd && prUrl ? { cwd: activeCwd, prUrl } : undefined),
+    [activeCwd, prUrl],
+  );
+  const annotations = useDiffAnnotations(activeThreadId, isAgentActive, publishContext);
   const hasAnnotations = annotations.length > 0;
 
   const gitBranchesQuery = useQuery(gitBranchesQueryOptions(activeCwd ?? null));
