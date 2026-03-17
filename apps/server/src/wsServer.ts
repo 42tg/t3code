@@ -1146,12 +1146,6 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         }
         const [, owner, repo, prNumber] = prUrlMatch;
 
-        const ghComments = comments.map((c) => ({
-          path: c.file,
-          line: c.startLine,
-          body: c.body,
-        }));
-
         // Get the PR head SHA from GitHub API instead of the local worktree
         // (worktree git link may be broken if the clone was removed).
         const headSha = yield* gitHubCli
@@ -1168,9 +1162,10 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
             ),
           );
 
-        // Create individual PR review comments for each finding, tracking failures.
+        // Create individual PR review comments, marking each as published on success.
         let published = 0;
-        for (const ghComment of ghComments) {
+        const now = new Date().toISOString();
+        for (const comment of comments) {
           const success = yield* gitHubCli
             .execute({
               cwd: body.cwd,
@@ -1180,11 +1175,11 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
                 "-X",
                 "POST",
                 "-f",
-                `body=${ghComment.body}`,
+                `body=${comment.body}`,
                 "-f",
-                `path=${ghComment.path}`,
+                `path=${comment.file}`,
                 "-F",
-                `line=${String(ghComment.line)}`,
+                `line=${String(comment.startLine)}`,
                 "-f",
                 `commit_id=${headSha}`,
               ],
@@ -1194,7 +1189,13 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
               Effect.map(() => true),
               Effect.catch(() => Effect.succeed(false)),
             );
-          if (success) published++;
+          if (success) {
+            // Mark comment as published in the database
+            yield* reviewCommentRepo
+              .update({ id: comment.id, publishedAt: now })
+              .pipe(Effect.ignore);
+            published++;
+          }
         }
 
         return {

@@ -14,6 +14,7 @@ export const ReviewComment = Schema.Struct({
   severity: ReviewCommentSeverity,
   createdAt: Schema.String,
   updatedAt: Schema.String,
+  publishedAt: Schema.optional(Schema.String),
 });
 export type ReviewComment = typeof ReviewComment.Type;
 
@@ -33,6 +34,7 @@ export const ReviewCommentUpdateInput = Schema.Struct({
   id: TrimmedNonEmptyString,
   body: Schema.optional(TrimmedNonEmptyString),
   severity: Schema.optional(ReviewCommentSeverity),
+  publishedAt: Schema.optional(Schema.String),
 });
 export type ReviewCommentUpdateInput = typeof ReviewCommentUpdateInput.Type;
 

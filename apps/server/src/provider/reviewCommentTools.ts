@@ -113,7 +113,7 @@ export function createReviewCommentMcpServer(
 
           const lines = comments.map(
             (c) =>
-              `- [${c.id}] ${c.file}:${c.startLine}${c.endLine ? `-${c.endLine}` : ""} [${c.severity}] ${c.body}`,
+              `- [${c.id}] ${c.file}:${c.startLine}${c.endLine ? `-${c.endLine}` : ""} [${c.severity}]${c.publishedAt ? " (published)" : ""} ${c.body}`,
           );
 
           return {

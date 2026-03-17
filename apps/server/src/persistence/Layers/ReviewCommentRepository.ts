@@ -34,6 +34,7 @@ const ReviewCommentDbRowSchema = Schema.Struct({
   severity: ReviewCommentSeverity,
   createdAt: Schema.String,
   updatedAt: Schema.String,
+  publishedAt: Schema.NullOr(Schema.String),
 });
 
 function toPersistenceSqlOrDecodeError(sqlOperation: string, decodeOperation: string) {
@@ -83,6 +84,7 @@ const makeReviewCommentRepository = Effect.gen(function* () {
         SET
           body = COALESCE(${input.body ?? null}, body),
           severity = COALESCE(${input.severity ?? null}, severity),
+          published_at = COALESCE(${input.publishedAt ?? null}, published_at),
           updated_at = ${new Date().toISOString()}
         WHERE id = ${input.id}
       `,
@@ -111,7 +113,8 @@ const makeReviewCommentRepository = Effect.gen(function* () {
           body,
           severity,
           created_at AS "createdAt",
-          updated_at AS "updatedAt"
+          updated_at AS "updatedAt",
+          published_at AS "publishedAt"
         FROM review_comments
         WHERE thread_id = ${threadId}
         ORDER BY file ASC, start_line ASC
@@ -186,6 +189,7 @@ const makeReviewCommentRepository = Effect.gen(function* () {
           severity: row.severity,
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
+          ...(row.publishedAt !== null ? { publishedAt: row.publishedAt } : {}),
         })),
       ),
     );

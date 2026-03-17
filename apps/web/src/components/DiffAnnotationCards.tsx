@@ -66,14 +66,13 @@ function ReviewCommentInlineCard({
   const config = SEVERITY_CONFIG[comment.severity];
   const Icon = config.icon;
   const [publishing, setPublishing] = useState(false);
-  const [published, setPublished] = useState(false);
+  const published = !!comment.publishedAt;
 
   const handlePublish = async () => {
     if (!onPublish || publishing || published) return;
     setPublishing(true);
     try {
       await onPublish(comment);
-      setPublished(true);
       toastManager.add({ type: "success", title: "Comment published to GitHub" });
     } catch (err) {
       toastManager.add({
