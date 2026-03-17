@@ -62,6 +62,8 @@ export interface GitHubCliShape {
     readonly cwd: string;
     readonly headSelector?: string;
     readonly limit?: number;
+    /** Optional `owner/repo` to scope the list (avoids upstream resolution for forks). */
+    readonly repo?: string;
   }) => Effect.Effect<ReadonlyArray<GitHubPullRequestSummary>, GitHubCliError>;
 
   /**

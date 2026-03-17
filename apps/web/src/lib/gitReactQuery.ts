@@ -89,13 +89,13 @@ export function gitDiffWorkingTreeQueryOptions(cwd: string | null) {
   });
 }
 
-export function gitListOpenPrsQueryOptions(cwd: string | null) {
+export function gitListOpenPrsQueryOptions(cwd: string | null, repo?: string) {
   return queryOptions({
-    queryKey: ["git", "openPrs", cwd] as const,
+    queryKey: ["git", "openPrs", cwd, repo] as const,
     queryFn: async () => {
       const api = ensureNativeApi();
       if (!cwd) throw new Error("Git PR list is unavailable.");
-      return api.git.listOpenPrs({ cwd });
+      return api.git.listOpenPrs({ cwd, ...(repo ? { repo } : {}) });
     },
     enabled: cwd !== null,
     staleTime: 30_000,

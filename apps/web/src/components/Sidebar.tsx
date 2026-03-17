@@ -88,6 +88,7 @@ import { useThreadSelectionStore } from "../threadSelectionStore";
 import { formatWorktreePathForDisplay, getOrphanedWorktreePathForThread } from "../worktreeCleanup";
 import { isNonEmpty as isNonEmptyString } from "effect/String";
 import { Dialog, DialogPopup } from "./ui/dialog";
+import ReviewPrDialog from "./ReviewPrDialog";
 import StandaloneReviewPrDialog from "./StandaloneReviewPrDialog";
 import {
   resolveSidebarNewThreadEnvMode,
@@ -276,6 +277,7 @@ function ProjectActionButtons({
   isMobile,
   newThreadShortcutLabel,
   onOpenGitHub,
+  onReviewPr,
   onNewThread,
 }: {
   project: { id: ProjectId; name: string };
@@ -283,6 +285,7 @@ function ProjectActionButtons({
   isMobile: boolean;
   newThreadShortcutLabel: string | null;
   onOpenGitHub: (url: string) => void;
+  onReviewPr: () => void;
   onNewThread: () => void;
 }) {
   const buttonClass = isMobile
@@ -293,25 +296,46 @@ function ProjectActionButtons({
   return (
     <>
       {githubUrl && (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <button
-                type="button"
-                aria-label={`Open ${project.name} on GitHub`}
-                className={buttonClass}
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onOpenGitHub(githubUrl);
-                }}
-              >
-                <GitHubIcon className={iconClass} />
-              </button>
-            }
-          />
-          <TooltipPopup side="top">Open on GitHub</TooltipPopup>
-        </Tooltip>
+        <>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label={`Open ${project.name} on GitHub`}
+                  className={buttonClass}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onOpenGitHub(githubUrl);
+                  }}
+                >
+                  <GitHubIcon className={iconClass} />
+                </button>
+              }
+            />
+            <TooltipPopup side="top">Open on GitHub</TooltipPopup>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label={`Review PR in ${project.name}`}
+                  className={buttonClass}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onReviewPr();
+                  }}
+                >
+                  <GitPullRequestIcon className={iconClass} />
+                </button>
+              }
+            />
+            <TooltipPopup side="top">Review PR</TooltipPopup>
+          </Tooltip>
+        </>
       )}
       <Tooltip>
         <TooltipTrigger
@@ -418,6 +442,11 @@ export default function Sidebar() {
   const suppressProjectClickAfterDragRef = useRef(false);
   const [desktopUpdateState, setDesktopUpdateState] = useState<DesktopUpdateState | null>(null);
   const [standaloneReviewOpen, setStandaloneReviewOpen] = useState(false);
+  const [reviewPrProject, setReviewPrProject] = useState<{
+    id: ProjectId;
+    cwd: string;
+    githubUrl?: string;
+  } | null>(null);
   const selectedThreadIds = useThreadSelectionStore((s) => s.selectedThreadIds);
   const toggleThreadSelection = useThreadSelectionStore((s) => s.toggleThread);
   const rangeSelectTo = useThreadSelectionStore((s) => s.rangeSelectTo);
@@ -1576,6 +1605,17 @@ export default function Sidebar() {
                                     const api = readNativeApi();
                                     if (api) void api.shell.openExternal(url);
                                   }}
+                                  onReviewPr={() => {
+                                    setOpenMobile(false);
+                                    {
+                                      const url = githubUrlByProjectId.get(project.id);
+                                      setReviewPrProject({
+                                        id: project.id,
+                                        cwd: project.cwd,
+                                        ...(url ? { githubUrl: url } : {}),
+                                      });
+                                    }
+                                  }}
                                   onNewThread={() => {
                                     setOpenMobile(false);
                                     void handleNewThread(project.id, {
@@ -1596,6 +1636,14 @@ export default function Sidebar() {
                                   onOpenGitHub={(url) => {
                                     const api = readNativeApi();
                                     if (api) void api.shell.openExternal(url);
+                                  }}
+                                  onReviewPr={() => {
+                                    const url = githubUrlByProjectId.get(project.id);
+                                    setReviewPrProject({
+                                      id: project.id,
+                                      cwd: project.cwd,
+                                      ...(url ? { githubUrl: url } : {}),
+                                    });
                                   }}
                                   onNewThread={() => {
                                     void handleNewThread(project.id, {
@@ -1908,6 +1956,26 @@ export default function Sidebar() {
             projectsWorkingDirectory={appSettings.projectsWorkingDirectory}
             onClose={() => setStandaloneReviewOpen(false)}
           />
+        </DialogPopup>
+      </Dialog>
+
+      <Dialog
+        open={reviewPrProject !== null}
+        onOpenChange={(open) => {
+          if (!open) setReviewPrProject(null);
+        }}
+      >
+        <DialogPopup>
+          {reviewPrProject && (
+            <ReviewPrDialog
+              projectId={reviewPrProject.id}
+              projectCwd={reviewPrProject.cwd}
+              {...(reviewPrProject.githubUrl
+                ? { repo: reviewPrProject.githubUrl.replace("https://github.com/", "") }
+                : {})}
+              onClose={() => setReviewPrProject(null)}
+            />
+          )}
         </DialogPopup>
       </Dialog>
     </>

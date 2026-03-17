@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -16,7 +16,6 @@ import {
   DialogFooter,
 } from "./ui/dialog";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
 import { toastManager } from "./ui/toast";
 import {
   gitCreateWorktreeMutationOptions,
@@ -24,21 +23,26 @@ import {
   gitListOpenPrsQueryOptions,
   invalidateGitQueries,
 } from "../lib/gitReactQuery";
-import { isLikelyPrReference, normalizePrReference, buildReviewPrompt } from "../lib/prReviewUtils";
+import { buildReviewPrompt } from "../lib/prReviewUtils";
 import { newThreadId } from "../lib/utils";
 import { useComposerDraftStore } from "../composerDraftStore";
 
 interface ReviewPrDialogProps {
   projectId: ProjectId;
   projectCwd: string;
+  /** Optional `owner/repo` to scope the PR list to the correct remote (important for forks). */
+  repo?: string;
   onClose: () => void;
 }
 
-export default function ReviewPrDialog({ projectId, projectCwd, onClose }: ReviewPrDialogProps) {
-  const [prInput, setPrInput] = useState("");
+export default function ReviewPrDialog({
+  projectId,
+  projectCwd,
+  repo,
+  onClose,
+}: ReviewPrDialogProps) {
   const [prDetails, setPrDetails] = useState<GitFetchPrDetailsResult | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -46,28 +50,7 @@ export default function ReviewPrDialog({ projectId, projectCwd, onClose }: Revie
 
   const fetchPrMutation = useMutation(gitFetchPrDetailsMutationOptions());
   const createWorktreeMutation = useMutation(gitCreateWorktreeMutationOptions({ queryClient }));
-  const openPrsQuery = useQuery(gitListOpenPrsQueryOptions(projectCwd));
-
-  const handleFetch = useCallback(() => {
-    const trimmed = prInput.trim();
-    if (!trimmed) return;
-
-    const normalized = normalizePrReference(trimmed);
-    setPrDetails(null);
-    fetchPrMutation.mutate(
-      { cwd: projectCwd, prUrl: normalized },
-      {
-        onSuccess: (data) => setPrDetails(data),
-        onError: (error) => {
-          toastManager.add({
-            type: "error",
-            title: "Failed to fetch PR details",
-            description: error instanceof Error ? error.message : "An error occurred.",
-          });
-        },
-      },
-    );
-  }, [fetchPrMutation, prInput, projectCwd]);
+  const openPrsQuery = useQuery(gitListOpenPrsQueryOptions(projectCwd, repo));
 
   const handleStartReview = useCallback(async () => {
     if (!prDetails) return;
@@ -106,7 +89,6 @@ export default function ReviewPrDialog({ projectId, projectCwd, onClose }: Revie
 
       // Close dialog and reset state
       onClose();
-      setPrInput("");
       setPrDetails(null);
     } catch (error) {
       toastManager.add({
@@ -128,7 +110,6 @@ export default function ReviewPrDialog({ projectId, projectCwd, onClose }: Revie
     setProjectDraftThreadId,
   ]);
 
-  const canFetch = prInput.trim().length > 0 && isLikelyPrReference(prInput);
   const isBusy = fetchPrMutation.isPending || isCreating;
 
   return (
@@ -138,41 +119,11 @@ export default function ReviewPrDialog({ projectId, projectCwd, onClose }: Revie
           <GitPullRequestIcon className="size-5" />
           Review Pull Request
         </DialogTitle>
-        <DialogDescription>
-          Enter a GitHub PR URL or number to create a review workspace.
-        </DialogDescription>
+        <DialogDescription>Select a pull request to create a review workspace.</DialogDescription>
       </DialogHeader>
 
       <DialogPanel>
         <div className="flex flex-col gap-4">
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              handleFetch();
-            }}
-          >
-            <div className="flex gap-2">
-              <Input
-                ref={inputRef}
-                placeholder="https://github.com/owner/repo/pull/123"
-                value={prInput}
-                onChange={(event) => {
-                  setPrInput(event.target.value);
-                  setPrDetails(null);
-                }}
-                disabled={isBusy}
-                autoFocus
-              />
-              <Button type="submit" variant="outline" size="sm" disabled={!canFetch || isBusy}>
-                {fetchPrMutation.isPending ? (
-                  <LoaderIcon className="size-3.5 animate-spin" />
-                ) : (
-                  "Fetch"
-                )}
-              </Button>
-            </div>
-          </form>
-
           {!prDetails && openPrsQuery.data && openPrsQuery.data.pullRequests.length > 0 && (
             <div className="flex flex-col gap-1">
               <p className="text-[11px] uppercase tracking-wide text-muted-foreground/60">
@@ -186,7 +137,6 @@ export default function ReviewPrDialog({ projectId, projectCwd, onClose }: Revie
                     className="flex w-full items-center gap-2 border-b border-border/40 px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-accent/50"
                     disabled={isBusy}
                     onClick={() => {
-                      setPrInput(pr.url);
                       setPrDetails(null);
                       fetchPrMutation.mutate(
                         { cwd: projectCwd, prUrl: pr.url },
@@ -215,6 +165,12 @@ export default function ReviewPrDialog({ projectId, projectCwd, onClose }: Revie
                 ))}
               </div>
             </div>
+          )}
+
+          {!prDetails && openPrsQuery.data && openPrsQuery.data.pullRequests.length === 0 && (
+            <p className="py-2 text-center text-xs text-muted-foreground/60">
+              No open pull requests
+            </p>
           )}
 
           {!prDetails && openPrsQuery.isLoading && (

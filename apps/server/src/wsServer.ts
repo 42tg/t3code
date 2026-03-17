@@ -988,6 +988,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         const body = stripRequestTag(request.body);
         const pullRequests = yield* gitHubCli.listOpenPullRequests({
           cwd: body.cwd,
+          ...(body.repo ? { repo: body.repo } : {}),
           limit: 30,
         });
         return { pullRequests };

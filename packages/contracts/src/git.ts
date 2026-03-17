@@ -161,6 +161,8 @@ export type GitFetchPrDetailsInput = typeof GitFetchPrDetailsInput.Type;
 
 export const GitListOpenPrsInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,
+  /** Optional `owner/repo` to scope the PR list (avoids upstream resolution for forks). */
+  repo: Schema.optional(TrimmedNonEmptyStringSchema),
 });
 export type GitListOpenPrsInput = typeof GitListOpenPrsInput.Type;
 
