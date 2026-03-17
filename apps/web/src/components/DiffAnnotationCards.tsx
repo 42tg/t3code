@@ -88,7 +88,7 @@ function ReviewCommentInlineCard({
 
   return (
     <div
-      className={`border-l-2 ${config.border} ${config.bg} mx-1 my-0.5 rounded-r-md px-3 py-2`}
+      className={`group/review-card border-l-2 ${config.border} ${config.bg} mx-1 my-0.5 rounded-r-md px-3 py-2`}
       data-review-comment-id={comment.id}
     >
       <div className="flex items-start gap-2">
@@ -109,21 +109,21 @@ function ReviewCommentInlineCard({
             {onPublish && (
               <button
                 type="button"
-                className={`ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
+                className={`ml-auto inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium transition-all sm:opacity-0 sm:group-hover/review-card:opacity-100 ${
                   published
-                    ? "text-emerald-600 dark:text-emerald-400"
-                    : "text-muted-foreground/60 hover:bg-accent hover:text-foreground"
+                    ? "border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                    : "border-border text-muted-foreground/70 hover:border-foreground/30 hover:text-foreground"
                 }`}
                 onClick={() => void handlePublish()}
                 disabled={publishing || published}
-                title={published ? "Published to GitHub" : "Publish this comment to GitHub"}
+                title={published ? "Published to GitHub" : "Publish as GitHub comment"}
               >
                 {publishing ? (
                   <LoaderIcon className="size-3 animate-spin" />
                 ) : (
                   <ExternalLinkIcon className="size-3" />
                 )}
-                {published ? "Published" : "Publish"}
+                {published ? "Published" : "Publish as GitHub Comment"}
               </button>
             )}
           </div>
