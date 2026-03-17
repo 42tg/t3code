@@ -1,8 +1,5 @@
 import type { GitFetchPrDetailsResult } from "@t3tools/contracts";
 
-// Re-export from canonical location for backward compatibility.
-export { buildSyntheticContextPatch } from "./diffAnnotations";
-
 export const GITHUB_PR_URL_REGEX = /github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+/;
 
 export function isLikelyPrReference(value: string): boolean {

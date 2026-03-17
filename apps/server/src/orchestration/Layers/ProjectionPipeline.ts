@@ -2,12 +2,15 @@ import {
   ApprovalRequestId,
   type ChatAttachment,
   type OrchestrationEvent,
+  type ThreadId,
 } from "@t3tools/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, FileSystem, Layer, Option, Path, Stream } from "effect";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { toPersistenceSqlError, type ProjectionRepositoryError } from "../../persistence/Errors.ts";
+import { ReviewCommentRepository } from "../../persistence/Services/ReviewCommentRepository.ts";
+import { ReviewCommentRepositoryLive } from "../../persistence/Layers/ReviewCommentRepository.ts";
 import { OrchestrationEventStore } from "../../persistence/Services/OrchestrationEventStore.ts";
 import { ProjectionPendingApprovalRepository } from "../../persistence/Services/ProjectionPendingApprovals.ts";
 import { ProjectionProjectRepository } from "../../persistence/Services/ProjectionProjects.ts";
@@ -349,6 +352,7 @@ const makeOrchestrationProjectionPipeline = Effect.gen(function* () {
   const projectionThreadSessionRepository = yield* ProjectionThreadSessionRepository;
   const projectionTurnRepository = yield* ProjectionTurnRepository;
   const projectionPendingApprovalRepository = yield* ProjectionPendingApprovalRepository;
+  const reviewCommentRepository = yield* ReviewCommentRepository;
 
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -1172,6 +1176,21 @@ const makeOrchestrationProjectionPipeline = Effect.gen(function* () {
           }),
         ),
       );
+
+      // Clean up review comments for deleted threads.
+      yield* Effect.forEach(
+        attachmentSideEffects.deletedThreadIds,
+        (threadId) =>
+          reviewCommentRepository.deleteByThreadId({ threadId: threadId as ThreadId }).pipe(
+            Effect.catch((cause) =>
+              Effect.logWarning("failed to clean up review comments for deleted thread", {
+                threadId,
+                cause,
+              }),
+            ),
+          ),
+        { concurrency: 1 },
+      );
     });
 
   const bootstrapProjector = (projector: ProjectorDefinition) =>
@@ -1242,4 +1261,5 @@ export const OrchestrationProjectionPipelineLive = Layer.effect(
   Layer.provideMerge(ProjectionTurnRepositoryLive),
   Layer.provideMerge(ProjectionPendingApprovalRepositoryLive),
   Layer.provideMerge(ProjectionStateRepositoryLive),
+  Layer.provideMerge(ReviewCommentRepositoryLive),
 );

@@ -57,6 +57,7 @@
         "node-pty": "^1.1.0",
         "open": "^10.1.0",
         "ws": "^8.18.0",
+        "zod": "^4.3.6",
       },
       "devDependencies": {
         "@effect/language-service": "catalog:",
@@ -70,7 +71,6 @@
         "tsdown": "catalog:",
         "typescript": "catalog:",
         "vitest": "catalog:",
-        "zod": "^4.3.6",
       },
     },
     "apps/web": {

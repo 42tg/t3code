@@ -813,12 +813,32 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
 
       case WS_METHODS.projectsReadFile: {
         const body = stripRequestTag(request.body);
-        // Try resolving relative to cwd first; if not found, walk up to
-        // the git repo root (cwd might be a subdirectory like apps/server).
-        const candidates = [path.resolve(body.cwd, body.relativePath)];
+
+        // Build candidate roots: cwd + git repo root (if different).
+        const roots = [body.cwd];
         const gitRoot = yield* git.getRepoRoot(body.cwd);
         if (gitRoot && gitRoot !== path.resolve(body.cwd)) {
-          candidates.push(path.resolve(gitRoot, body.relativePath));
+          roots.push(gitRoot);
+        }
+
+        // Resolve each candidate and validate it stays within its root
+        // (prevents path traversal via "../../../etc/passwd").
+        const candidates: string[] = [];
+        for (const root of roots) {
+          const resolvedCandidate = yield* resolveWorkspaceWritePath({
+            workspaceRoot: root,
+            relativePath: body.relativePath,
+            path,
+          }).pipe(Effect.catch(() => Effect.succeed(null)));
+          if (resolvedCandidate) {
+            candidates.push(resolvedCandidate.absolutePath);
+          }
+        }
+
+        if (candidates.length === 0) {
+          return yield* new RouteRequestError({
+            message: "File path must be relative and stay within the project root.",
+          });
         }
 
         let content: string | null = null;
@@ -1132,9 +1152,10 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         // Resolve actual HEAD commit SHA — GitHub API requires a real SHA, not "HEAD"
         const headSha = yield* git.resolveRef(body.cwd, "HEAD");
 
-        // Create individual PR review comments for each finding
+        // Create individual PR review comments for each finding, tracking failures.
+        let published = 0;
         for (const ghComment of ghComments) {
-          yield* gitHubCli
+          const success = yield* gitHubCli
             .execute({
               cwd: body.cwd,
               args: [
@@ -1153,11 +1174,16 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
               ],
               timeoutMs: 15_000,
             })
-            .pipe(Effect.ignore);
+            .pipe(
+              Effect.map(() => true),
+              Effect.catch(() => Effect.succeed(false)),
+            );
+          if (success) published++;
         }
 
         return {
-          published: comments.length,
+          published,
+          failed: comments.length - published,
           url: `https://github.com/${owner}/${repo}/pull/${prNumber}`,
         };
       }

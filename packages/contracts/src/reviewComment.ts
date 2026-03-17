@@ -67,6 +67,7 @@ export type ReviewCommentListResult = typeof ReviewCommentListResult.Type;
 
 export const ReviewCommentPublishResult = Schema.Struct({
   published: Schema.Number,
+  failed: Schema.optional(Schema.Number),
   url: Schema.optional(Schema.String),
 });
 export type ReviewCommentPublishResult = typeof ReviewCommentPublishResult.Type;

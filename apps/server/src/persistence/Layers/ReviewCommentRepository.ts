@@ -129,8 +129,8 @@ const makeReviewCommentRepository = Effect.gen(function* () {
 
   const add: ReviewCommentRepositoryShape["add"] = (input) => {
     const now = new Date().toISOString();
-    const row = {
-      id: crypto.randomUUID(),
+    const row: typeof ReviewComment.Type = {
+      id: crypto.randomUUID() as typeof TrimmedNonEmptyString.Type,
       threadId: input.threadId,
       file: input.file,
       startLine: input.startLine,
@@ -139,7 +139,7 @@ const makeReviewCommentRepository = Effect.gen(function* () {
       severity: input.severity,
       createdAt: now,
       updatedAt: now,
-    } as typeof ReviewComment.Type;
+    };
 
     return insertReviewCommentRow(row).pipe(
       Effect.mapError(

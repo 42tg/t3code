@@ -29,7 +29,8 @@
     "effect": "catalog:",
     "node-pty": "^1.1.0",
     "open": "^10.1.0",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@effect/language-service": "catalog:",
@@ -42,8 +43,7 @@
     "@types/ws": "^8.5.13",
     "tsdown": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:",
-    "zod": "^4.3.6"
+    "vitest": "catalog:"
   },
   "engines": {
     "node": "^22.13 || ^23.4 || >=24.10"
