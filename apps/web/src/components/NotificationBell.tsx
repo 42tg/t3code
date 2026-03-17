@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import type { ReviewRequest } from "@t3tools/contracts";
-import { BellIcon, BotIcon, GitPullRequestIcon, XIcon } from "lucide-react";
+import { BellIcon, BotIcon, ExternalLinkIcon, GitPullRequestIcon, XIcon } from "lucide-react";
 
 import { Popover, PopoverTrigger, PopoverPopup } from "./ui/popover";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
@@ -11,27 +11,42 @@ import { readNativeApi } from "../nativeApi";
 
 type Filter = "reviews" | "bot" | "all";
 
+const emptyRequests: ReviewRequest[] = [];
+
 interface NotificationBellProps {
   onStartReview: (prUrl: string, requestId: string) => void;
 }
 
 export default function NotificationBell({ onStartReview }: NotificationBellProps) {
   const [filter, setFilter] = useState<Filter>("reviews");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const reviewRequestsQuery = useQuery(reviewRequestListQueryOptions());
 
-  const requests = reviewRequestsQuery.data?.reviewRequests ?? [];
+  const requests = reviewRequestsQuery.data?.reviewRequests ?? emptyRequests;
 
   // Badge only counts pending non-bot requests — bots don't trigger notifications
   const pendingCount = requests.filter((r) => r.status === "pending" && !r.isBot).length;
 
-  const filteredRequests =
-    filter === "all"
-      ? requests
-      : filter === "bot"
-        ? requests.filter((r) => r.isBot)
-        : requests.filter((r) => !r.isBot);
+  const filteredRequests = useMemo(() => {
+    const filtered =
+      filter === "all"
+        ? requests
+        : filter === "bot"
+          ? requests.filter((r) => r.isBot)
+          : requests.filter((r) => !r.isBot);
+
+    // Sort: in_review first (active work), then pending (needs attention).
+    // Within each group, newest PR number first for a stable predictable order.
+    const statusOrder: Record<string, number> = { in_review: 0, pending: 1 };
+    return filtered.toSorted((a, b) => {
+      const sa = statusOrder[a.status] ?? 2;
+      const sb = statusOrder[b.status] ?? 2;
+      if (sa !== sb) return sa - sb;
+      return b.prNumber - a.prNumber;
+    });
+  }, [requests, filter]);
 
   const handleDismiss = async (event: React.MouseEvent, id: string) => {
     event.stopPropagation();
@@ -111,62 +126,107 @@ export default function NotificationBell({ onStartReview }: NotificationBellProp
                   : "No review requests"}
             </div>
           ) : (
-            <div className="max-h-72 overflow-y-auto">
-              {filteredRequests.map((request) => (
-                <button
-                  key={request.id}
-                  type="button"
-                  className="group/item flex w-full items-start gap-2 border-b border-border/30 px-3 py-2.5 text-left transition-colors last:border-b-0 hover:bg-accent/50"
-                  onClick={() => handleClick(request)}
-                >
-                  <GitPullRequestIcon
-                    className={`mt-0.5 size-3.5 shrink-0 ${
-                      request.status === "in_review" ? "text-violet-500" : "text-emerald-500"
-                    }`}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="truncate text-xs font-medium">
-                        {request.repoNameWithOwner}#{request.prNumber}
-                      </span>
-                      {request.isBot && (
-                        <BotIcon className="size-3 shrink-0 text-muted-foreground/50" />
-                      )}
-                      {request.status === "in_review" && (
-                        <span className="shrink-0 rounded-full bg-violet-500/15 px-1.5 py-0.5 text-[9px] font-medium text-violet-500">
-                          In Review
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-0.5 truncate text-[11px] text-muted-foreground/70">
-                      {request.prTitle}
-                    </p>
-                    <div className="mt-0.5 flex items-center gap-2">
-                      <span className="text-[10px] text-muted-foreground/50">
-                        by {request.authorLogin}
-                      </span>
-                      {request.status === "in_review" && (
-                        <button
-                          type="button"
-                          className="rounded-md border border-border/50 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground/70 transition-colors hover:bg-secondary hover:text-foreground"
-                          aria-label="Mark as done"
-                          onClick={(event) => void handleDismiss(event, request.id)}
+            <div className="max-h-80 overflow-y-auto">
+              {filteredRequests.map((request, index) => {
+                const isExpanded = expandedId === request.id;
+                const prevStatus = index > 0 ? filteredRequests[index - 1]!.status : null;
+                const showGroupLabel = request.status !== prevStatus;
+                return (
+                  <div key={request.id}>
+                    {showGroupLabel && (
+                      <div className="sticky top-0 z-10 border-b border-border/30 bg-popover/95 px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/50 backdrop-blur-sm">
+                        {request.status === "in_review" ? "In progress" : "Awaiting review"}
+                      </div>
+                    )}
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      className={`group/item flex w-full items-start gap-2 border-b border-border/30 px-3 text-left transition-[background-color,padding] duration-150 ease-out hover:bg-accent/50 ${isExpanded ? "bg-accent/30 py-3" : "py-2.5"}`}
+                      onClick={() =>
+                        setExpandedId((prev) => (prev === request.id ? null : request.id))
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setExpandedId((prev) => (prev === request.id ? null : request.id));
+                        }
+                      }}
+                    >
+                      <GitPullRequestIcon
+                        className={`mt-0.5 size-3.5 shrink-0 ${
+                          request.status === "in_review" ? "text-violet-500" : "text-emerald-500"
+                        }`}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate text-xs text-muted-foreground/60">
+                            {request.repoNameWithOwner}
+                          </span>
+                          <span className="shrink-0 text-xs text-muted-foreground/60">
+                            #{request.prNumber}
+                          </span>
+                          {request.isBot && (
+                            <BotIcon className="size-3 shrink-0 text-muted-foreground/50" />
+                          )}
+                        </div>
+                        <p
+                          className={`mt-0.5 text-xs font-medium transition-colors duration-150 ${
+                            isExpanded
+                              ? "line-clamp-3 text-foreground/90"
+                              : "truncate text-foreground/80"
+                          }`}
                         >
-                          Done
-                        </button>
-                      )}
+                          {request.prTitle}
+                        </p>
+                        <span className="mt-0.5 block text-[10px] text-muted-foreground/50">
+                          by {request.authorLogin}
+                        </span>
+                        {/* Action buttons — animated reveal via CSS grid height trick */}
+                        <div
+                          className={`grid transition-[grid-template-rows,opacity] duration-150 ease-out ${
+                            isExpanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+                          }`}
+                        >
+                          <div className="overflow-hidden">
+                            <div className="flex items-center gap-2 pt-2">
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-1 rounded-md bg-violet-600 px-2 py-1 text-[10px] font-medium text-white transition-colors hover:bg-violet-500"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleClick(request);
+                                }}
+                              >
+                                <ExternalLinkIcon className="size-3" />
+                                {request.status === "in_review" && request.threadId
+                                  ? "Go to Review"
+                                  : "Start Review"}
+                              </button>
+                              {request.status === "in_review" && (
+                                <button
+                                  type="button"
+                                  className="rounded-md border border-border/50 px-2 py-1 text-[10px] font-medium text-muted-foreground/70 transition-colors hover:bg-secondary hover:text-foreground"
+                                  onClick={(event) => void handleDismiss(event, request.id)}
+                                >
+                                  Done
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground/40 opacity-0 transition-opacity hover:bg-secondary hover:text-foreground group-hover/item:opacity-100"
+                        aria-label="Dismiss"
+                        onClick={(event) => void handleDismiss(event, request.id)}
+                      >
+                        <XIcon className="size-3" />
+                      </button>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground/40 opacity-0 transition-opacity hover:bg-secondary hover:text-foreground group-hover/item:opacity-100"
-                    aria-label="Dismiss"
-                    onClick={(event) => void handleDismiss(event, request.id)}
-                  >
-                    <XIcon className="size-3" />
-                  </button>
-                </button>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
