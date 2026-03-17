@@ -15,7 +15,8 @@ export default Effect.gen(function* () {
       severity TEXT NOT NULL DEFAULT 'info',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
-      published_at TEXT DEFAULT NULL
+      published_at TEXT DEFAULT NULL,
+      published_url TEXT DEFAULT NULL
     )
   `;
 

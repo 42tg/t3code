@@ -11,11 +11,12 @@
  */
 
 import type { ReviewComment, ThreadId } from "@t3tools/contracts";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 
 import { type DiffAnnotation, reviewCommentsToAnnotations } from "../lib/diffAnnotations";
 import {
+  invalidateReviewCommentQueries,
   reviewCommentListQueryOptions,
   REVIEW_COMMENT_POLL_INTERVAL_ACTIVE,
 } from "../lib/reviewCommentReactQuery";
@@ -43,6 +44,7 @@ export function useDiffAnnotations(
     ),
   );
 
+  const queryClient = useQueryClient();
   const onPublish = useCallback(
     async (comment: ReviewComment) => {
       if (!threadId || !publishContext) return;
@@ -53,8 +55,9 @@ export function useDiffAnnotations(
         prUrl: publishContext.prUrl,
         commentId: comment.id,
       });
+      await invalidateReviewCommentQueries(queryClient, threadId);
     },
-    [threadId, publishContext],
+    [threadId, publishContext, queryClient],
   );
 
   return useMemo(() => {

@@ -1166,7 +1166,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         let published = 0;
         const now = new Date().toISOString();
         for (const comment of comments) {
-          const success = yield* gitHubCli
+          const ghUrl = yield* gitHubCli
             .execute({
               cwd: body.cwd,
               args: [
@@ -1186,13 +1186,20 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
               timeoutMs: 15_000,
             })
             .pipe(
-              Effect.map(() => true),
-              Effect.catch(() => Effect.succeed(false)),
+              Effect.map((r) => {
+                try {
+                  const json = JSON.parse(r.stdout) as { html_url?: string };
+                  return json.html_url ?? null;
+                } catch {
+                  return null;
+                }
+              }),
+              Effect.catch(() => Effect.succeed(null as string | null)),
             );
-          if (success) {
-            // Mark comment as published in the database
+          if (ghUrl !== null) {
+            // Mark comment as published with the GitHub URL
             yield* reviewCommentRepo
-              .update({ id: comment.id, publishedAt: now })
+              .update({ id: comment.id, publishedAt: now, publishedUrl: ghUrl })
               .pipe(Effect.ignore);
             published++;
           }

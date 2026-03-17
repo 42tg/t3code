@@ -11,13 +11,13 @@ import type { DiffLineAnnotation } from "@pierre/diffs";
 import type { ReviewComment } from "@t3tools/contracts";
 import {
   AlertCircleIcon,
-  ExternalLinkIcon,
   InfoIcon,
   LightbulbIcon,
   LoaderIcon,
   OctagonAlertIcon,
 } from "lucide-react";
 import type { DiffAnnotation } from "../lib/diffAnnotations";
+import { GitHubIcon } from "./Icons";
 import { ensureNativeApi } from "../nativeApi";
 import { toastManager } from "./ui/toast";
 
@@ -105,26 +105,38 @@ function ReviewCommentInlineCard({
             >
               {config.label}
             </span>
-            {onPublish && (
+            {published && comment.publishedUrl ? (
+              <a
+                href={comment.publishedUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-auto inline-flex items-center gap-1 rounded border border-emerald-500/30 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 transition-all hover:border-emerald-500/50 hover:text-emerald-500 sm:opacity-0 sm:group-hover/review-card:opacity-100 dark:text-emerald-400"
+                title="View on GitHub"
+              >
+                <GitHubIcon className="size-3" />
+                Published
+              </a>
+            ) : published ? (
+              <span className="ml-auto inline-flex items-center gap-1 rounded border border-emerald-500/30 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 sm:opacity-0 sm:group-hover/review-card:opacity-100 dark:text-emerald-400">
+                <GitHubIcon className="size-3" />
+                Published
+              </span>
+            ) : onPublish ? (
               <button
                 type="button"
-                className={`ml-auto inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium transition-all sm:opacity-0 sm:group-hover/review-card:opacity-100 ${
-                  published
-                    ? "border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
-                    : "border-border text-muted-foreground/70 hover:border-foreground/30 hover:text-foreground"
-                }`}
+                className="ml-auto inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground/70 transition-all hover:border-foreground/30 hover:text-foreground sm:opacity-0 sm:group-hover/review-card:opacity-100"
                 onClick={() => void handlePublish()}
-                disabled={publishing || published}
-                title={published ? "Published to GitHub" : "Publish as GitHub comment"}
+                disabled={publishing}
+                title="Publish as GitHub comment"
               >
                 {publishing ? (
                   <LoaderIcon className="size-3 animate-spin" />
                 ) : (
-                  <ExternalLinkIcon className="size-3" />
+                  <GitHubIcon className="size-3" />
                 )}
-                {published ? "Published" : "Publish as GitHub Comment"}
+                Publish as GitHub Comment
               </button>
-            )}
+            ) : null}
           </div>
           <p className="mt-1 text-xs leading-relaxed text-foreground/90 whitespace-pre-wrap">
             {comment.body}
