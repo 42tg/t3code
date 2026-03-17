@@ -1,5 +1,8 @@
 import type { GitFetchPrDetailsResult } from "@t3tools/contracts";
 
+// Re-export from canonical location for backward compatibility.
+export { buildSyntheticContextPatch } from "./diffAnnotations";
+
 export const GITHUB_PR_URL_REGEX = /github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+/;
 
 export function isLikelyPrReference(value: string): boolean {
@@ -27,50 +30,6 @@ export function normalizePrReference(value: string): string {
   } catch {
     return trimmed;
   }
-}
-
-/**
- * Build a synthetic unified-diff patch for the given file, expanding
- * each comment's location to a ±contextPadding line window.
- * Overlapping windows are merged into single hunks.
- *
- * Used to render annotated code context in the diff viewer for lines
- * that are not part of the actual diff.
- */
-export function buildSyntheticContextPatch(
-  file: string,
-  comments: { startLine: number; endLine?: number | undefined }[],
-  allLines: string[],
-  contextPadding = 10,
-): string {
-  if (comments.length === 0) return "";
-  const totalLines = allLines.length;
-
-  const rawRanges = comments
-    .map((c) => ({
-      start: Math.max(1, c.startLine - contextPadding),
-      end: Math.min(totalLines, (c.endLine ?? c.startLine) + contextPadding),
-    }))
-    .toSorted((a, b) => a.start - b.start);
-
-  const merged: { start: number; end: number }[] = [];
-  for (const r of rawRanges) {
-    const last = merged[merged.length - 1];
-    if (last && r.start <= last.end + 1) {
-      last.end = Math.max(last.end, r.end);
-    } else {
-      merged.push({ ...r });
-    }
-  }
-
-  const hunks = merged.map((range) => {
-    const count = range.end - range.start + 1;
-    const hunkHeader = `@@ -${range.start},${count} +${range.start},${count} @@`;
-    const hunkLines = allLines.slice(range.start - 1, range.end).map((l: string) => ` ${l}`);
-    return `${hunkHeader}\n${hunkLines.join("\n")}`;
-  });
-
-  return `--- a/${file}\n+++ b/${file}\n${hunks.join("\n")}\n`;
 }
 
 export function buildReviewPrompt(pr: GitFetchPrDetailsResult): string {

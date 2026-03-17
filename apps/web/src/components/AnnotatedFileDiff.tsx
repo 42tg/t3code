@@ -27,7 +27,7 @@ import {
   toDiffLineAnnotations,
 } from "../lib/diffAnnotations";
 import { DIFF_UNSAFE_CSS, resolveDiffThemeName } from "../lib/diffRendering";
-import { buildSyntheticContextPatch } from "../lib/prReviewUtils";
+import { buildSyntheticContextPatch } from "../lib/diffAnnotations";
 import { ensureNativeApi } from "../nativeApi";
 import { renderDiffAnnotation } from "./DiffAnnotationCards";
 import { DiffFileHeader } from "./DiffFileHeader";

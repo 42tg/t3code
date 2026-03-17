@@ -110,3 +110,50 @@ export function countAnnotationsForFile(
 ): number {
   return annotationsByFile?.get(normalizedPath)?.length ?? 0;
 }
+
+// ── Synthetic context patches ────────────────────────────────────────
+
+/**
+ * Build a synthetic unified-diff patch for the given file, expanding
+ * each annotation's location to a ±contextPadding line window.
+ * Overlapping windows are merged into single hunks.
+ *
+ * Used to render annotated code context in the diff viewer for lines
+ * that are not part of the actual diff (annotation-only files, or
+ * annotations on lines outside the visible diff hunks).
+ */
+export function buildSyntheticContextPatch(
+  file: string,
+  lineRanges: { startLine: number; endLine?: number | undefined }[],
+  allLines: string[],
+  contextPadding = 10,
+): string {
+  if (lineRanges.length === 0) return "";
+  const totalLines = allLines.length;
+
+  const rawRanges = lineRanges
+    .map((c) => ({
+      start: Math.max(1, c.startLine - contextPadding),
+      end: Math.min(totalLines, (c.endLine ?? c.startLine) + contextPadding),
+    }))
+    .toSorted((a, b) => a.start - b.start);
+
+  const merged: { start: number; end: number }[] = [];
+  for (const r of rawRanges) {
+    const last = merged[merged.length - 1];
+    if (last && r.start <= last.end + 1) {
+      last.end = Math.max(last.end, r.end);
+    } else {
+      merged.push({ ...r });
+    }
+  }
+
+  const hunks = merged.map((range) => {
+    const count = range.end - range.start + 1;
+    const hunkHeader = `@@ -${range.start},${count} +${range.start},${count} @@`;
+    const hunkLines = allLines.slice(range.start - 1, range.end).map((l: string) => ` ${l}`);
+    return `${hunkHeader}\n${hunkLines.join("\n")}`;
+  });
+
+  return `--- a/${file}\n+++ b/${file}\n${hunks.join("\n")}\n`;
+}
