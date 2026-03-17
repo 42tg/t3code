@@ -117,6 +117,8 @@ export interface GitHubCliShape {
       readonly title: string;
       readonly url: string;
       readonly updatedAt: string;
+      readonly body: string;
+      readonly labels: ReadonlyArray<{ readonly name: string }>;
       readonly repository: { readonly name: string; readonly nameWithOwner: string };
       readonly author: { readonly login: string };
     }>,

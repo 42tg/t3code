@@ -31,6 +31,8 @@ const ReviewRequestDbRowSchema = Schema.Struct({
   isBot: Schema.Number,
   status: ReviewRequestStatus,
   threadId: Schema.NullOr(ThreadId),
+  prBody: Schema.NullOr(Schema.String),
+  prLabels: Schema.String, // JSON string in DB
   createdAt: Schema.String,
   updatedAt: Schema.String,
 });
@@ -42,19 +44,33 @@ function toPersistenceSqlOrDecodeError(sqlOperation: string, decodeOperation: st
       : toPersistenceSqlError(sqlOperation)(cause);
 }
 
-const dbRowToReviewRequest = (row: typeof ReviewRequestDbRowSchema.Type): ReviewRequest => ({
-  id: row.id,
-  prUrl: row.prUrl,
-  prNumber: row.prNumber,
-  prTitle: row.prTitle,
-  repoNameWithOwner: row.repoNameWithOwner,
-  authorLogin: row.authorLogin,
-  isBot: row.isBot !== 0,
-  status: row.status,
-  ...(row.threadId !== null ? { threadId: row.threadId } : {}),
-  createdAt: row.createdAt,
-  updatedAt: row.updatedAt,
-});
+const dbRowToReviewRequest = (row: typeof ReviewRequestDbRowSchema.Type): ReviewRequest => {
+  let parsedLabels: string[] = [];
+  try {
+    const parsed: unknown = JSON.parse(row.prLabels);
+    if (Array.isArray(parsed)) {
+      parsedLabels = parsed.filter((v): v is string => typeof v === "string");
+    }
+  } catch {
+    // Fallback to empty array on invalid JSON
+  }
+
+  return {
+    id: row.id,
+    prUrl: row.prUrl,
+    prNumber: row.prNumber,
+    prTitle: row.prTitle,
+    repoNameWithOwner: row.repoNameWithOwner,
+    authorLogin: row.authorLogin,
+    isBot: row.isBot !== 0,
+    status: row.status,
+    ...(row.threadId !== null ? { threadId: row.threadId } : {}),
+    ...(row.prBody !== null ? { prBody: row.prBody } : {}),
+    ...(parsedLabels.length > 0 ? { prLabels: parsedLabels } : {}),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+};
 
 const makeReviewRequestRepository = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -68,6 +84,8 @@ const makeReviewRequestRepository = Effect.gen(function* () {
     authorLogin: TrimmedNonEmptyString,
     isBot: Schema.Number,
     status: ReviewRequestStatus,
+    prBody: Schema.NullOr(Schema.String),
+    prLabels: Schema.String,
     createdAt: Schema.String,
     updatedAt: Schema.String,
   });
@@ -85,6 +103,8 @@ const makeReviewRequestRepository = Effect.gen(function* () {
           author_login,
           is_bot,
           status,
+          pr_body,
+          pr_labels,
           created_at,
           updated_at
         )
@@ -97,6 +117,8 @@ const makeReviewRequestRepository = Effect.gen(function* () {
           ${row.authorLogin},
           ${row.isBot},
           ${row.status},
+          ${row.prBody},
+          ${row.prLabels},
           ${row.createdAt},
           ${row.updatedAt}
         )
@@ -105,6 +127,8 @@ const makeReviewRequestRepository = Effect.gen(function* () {
           pr_title = ${row.prTitle},
           author_login = ${row.authorLogin},
           is_bot = ${row.isBot},
+          pr_body = ${row.prBody},
+          pr_labels = ${row.prLabels},
           updated_at = ${row.updatedAt}
       `,
   });
@@ -144,6 +168,8 @@ const makeReviewRequestRepository = Effect.gen(function* () {
           is_bot AS "isBot",
           status,
           thread_id AS "threadId",
+          pr_body AS "prBody",
+          pr_labels AS "prLabels",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
         FROM review_requests
@@ -167,6 +193,8 @@ const makeReviewRequestRepository = Effect.gen(function* () {
           is_bot AS "isBot",
           status,
           thread_id AS "threadId",
+          pr_body AS "prBody",
+          pr_labels AS "prLabels",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
         FROM review_requests
@@ -188,6 +216,8 @@ const makeReviewRequestRepository = Effect.gen(function* () {
       authorLogin: input.authorLogin as typeof TrimmedNonEmptyString.Type,
       isBot: input.isBot ? 1 : 0,
       status: "pending" as typeof ReviewRequestStatus.Type,
+      prBody: input.prBody ?? null,
+      prLabels: JSON.stringify(input.prLabels ?? []),
       createdAt: now,
       updatedAt: now,
     };

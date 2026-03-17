@@ -171,6 +171,8 @@ const RawGitHubReviewRequestSchema = Schema.Struct({
   title: TrimmedNonEmptyString,
   url: TrimmedNonEmptyString,
   updatedAt: Schema.String,
+  body: Schema.String,
+  labels: Schema.Array(Schema.Struct({ name: Schema.String })),
   repository: Schema.Struct({
     name: Schema.String,
     nameWithOwner: Schema.String,
@@ -359,13 +361,13 @@ const makeGitHubCli = Effect.sync(() => {
           "--limit",
           String(input.limit ?? 30),
           "--json",
-          "number,title,url,repository,author,updatedAt",
+          "number,title,url,repository,author,updatedAt,body,labels",
         ],
       }).pipe(
         Effect.map((result) => result.stdout.trim()),
         Effect.flatMap((raw) =>
           raw.length === 0
-            ? Effect.succeed([])
+            ? Effect.succeed([] as (typeof RawGitHubReviewRequestSchema.Type)[])
             : decodeGitHubJson(
                 raw,
                 Schema.Array(RawGitHubReviewRequestSchema),

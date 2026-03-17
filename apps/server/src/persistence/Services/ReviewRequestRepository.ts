@@ -24,6 +24,8 @@ export interface ReviewRequestUpsertInput {
   readonly repoNameWithOwner: string;
   readonly authorLogin: string;
   readonly isBot: boolean;
+  readonly prBody?: string;
+  readonly prLabels?: readonly string[];
 }
 
 /**

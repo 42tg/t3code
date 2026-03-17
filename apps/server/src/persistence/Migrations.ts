@@ -29,6 +29,7 @@ import Migration0014 from "./Migrations/014_ProjectionThreadActivityParentAndIte
 import Migration0015 from "./Migrations/015_ProjectionThreadsJiraTicket.ts";
 import Migration0016 from "./Migrations/016_ReviewComments.ts";
 import Migration0017 from "./Migrations/017_ReviewRequests.ts";
+import Migration0018 from "./Migrations/018_ReviewRequestsPrMeta.ts";
 import { Effect } from "effect";
 
 /**
@@ -59,6 +60,7 @@ const loader = Migrator.fromRecord({
   "15_ProjectionThreadsJiraTicket": Migration0015,
   "16_ReviewComments": Migration0016,
   "17_ReviewRequests": Migration0017,
+  "18_ReviewRequestsPrMeta": Migration0018,
 });
 
 /**

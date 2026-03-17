@@ -14,6 +14,8 @@ export const ReviewRequest = Schema.Struct({
   isBot: Schema.Boolean,
   status: ReviewRequestStatus,
   threadId: Schema.optional(ThreadId),
+  prBody: Schema.optional(Schema.String),
+  prLabels: Schema.optional(Schema.Array(Schema.String)),
   createdAt: Schema.String,
   updatedAt: Schema.String,
 });

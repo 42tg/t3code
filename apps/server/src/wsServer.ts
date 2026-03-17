@@ -1245,6 +1245,8 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
               repoNameWithOwner: pr.repository.nameWithOwner,
               authorLogin: pr.author.login,
               isBot,
+              ...(pr.body ? { prBody: pr.body } : {}),
+              prLabels: pr.labels.map((l) => l.name),
             })
             .pipe(Effect.ignore);
         }
