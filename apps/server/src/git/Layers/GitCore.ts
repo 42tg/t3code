@@ -1441,21 +1441,28 @@ const makeGitCore = Effect.gen(function* () {
           .split("/")
           .pop()
           ?.replace(/\.git$/, "") ?? "repo";
-      const clonedPath = path.join(input.targetDir, repoName);
+      // Expand ~ to the user's home directory (shells expand it, but
+      // programmatic callers pass it as a literal string).
+      const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? "";
+      const targetDir =
+        input.targetDir.startsWith("~/") && homeDir
+          ? path.join(homeDir, input.targetDir.slice(2))
+          : input.targetDir;
+      const clonedPath = path.join(targetDir, repoName);
 
       // Ensure parent directory exists
-      const targetExists = yield* fileSystem.stat(input.targetDir).pipe(
+      const targetExists = yield* fileSystem.stat(targetDir).pipe(
         Effect.map((stat) => stat.type === "Directory"),
         Effect.catch(() => Effect.succeed(false)),
       );
       if (!targetExists) {
-        yield* fileSystem.makeDirectory(input.targetDir, { recursive: true }).pipe(
+        yield* fileSystem.makeDirectory(targetDir, { recursive: true }).pipe(
           Effect.mapError(
             (error) =>
               new GitCommandError({
                 operation: "GitCore.cloneRepo.mkdir",
-                command: `mkdir -p ${input.targetDir}`,
-                cwd: input.targetDir,
+                command: `mkdir -p ${targetDir}`,
+                cwd: targetDir,
                 detail: `Failed to create target directory: ${error.message}`,
               }),
           ),
@@ -1479,7 +1486,7 @@ const makeGitCore = Effect.gen(function* () {
         }
       }
 
-      yield* executeGit("GitCore.cloneRepo", input.targetDir, ["clone", input.url], {
+      yield* executeGit("GitCore.cloneRepo", targetDir, ["clone", input.url], {
         timeoutMs: 300_000,
         fallbackErrorMessage: "git clone failed",
       });
