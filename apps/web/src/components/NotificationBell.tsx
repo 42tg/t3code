@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import type { ReviewRequest } from "@t3tools/contracts";
@@ -6,6 +7,7 @@ import { BellIcon, BotIcon, ExternalLinkIcon, GitPullRequestIcon, XIcon } from "
 
 import { Popover, PopoverTrigger, PopoverPopup } from "./ui/popover";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
+import { useSidebar } from "./ui/sidebar";
 import { reviewRequestListQueryOptions } from "../lib/gitReactQuery";
 import { readNativeApi } from "../nativeApi";
 
@@ -18,8 +20,10 @@ interface NotificationBellProps {
 }
 
 export default function NotificationBell({ onStartReview }: NotificationBellProps) {
+  const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState<Filter>("reviews");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const { isMobile, setOpenMobile } = useSidebar();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const reviewRequestsQuery = useQuery(reviewRequestListQueryOptions());
@@ -57,6 +61,8 @@ export default function NotificationBell({ onStartReview }: NotificationBellProp
   };
 
   const handleClick = (request: ReviewRequest) => {
+    setOpen(false);
+    setOpenMobile(false);
     if (request.status === "in_review" && request.threadId) {
       void navigate({ to: "/$threadId", params: { threadId: request.threadId } });
     } else {
@@ -68,7 +74,7 @@ export default function NotificationBell({ onStartReview }: NotificationBellProp
   const reviewCount = requests.filter((r) => !r.isBot).length;
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <Tooltip>
         <TooltipTrigger
           render={
@@ -88,7 +94,7 @@ export default function NotificationBell({ onStartReview }: NotificationBellProp
         <TooltipPopup side="bottom">Review requests</TooltipPopup>
       </Tooltip>
 
-      <PopoverPopup side="bottom" align="end" sideOffset={8} className="w-80">
+      <PopoverPopup side="bottom" align="end" sideOffset={8} positionerClassName="max-sm:z-[52]" className="max-sm:w-[calc(100vw-1rem)] sm:w-96">
         <div className="-my-4 -mx-4">
           <div className="border-b border-border/50 px-3 py-2">
             <div className="flex items-center gap-1">
@@ -126,13 +132,16 @@ export default function NotificationBell({ onStartReview }: NotificationBellProp
                   : "No review requests"}
             </div>
           ) : (
-            <div className="max-h-80 overflow-y-auto">
+            <div className="max-h-[70dvh] overflow-y-auto sm:max-h-[500px]">
               {filteredRequests.map((request, index) => {
                 const isExpanded = expandedId === request.id;
                 const prevStatus = index > 0 ? filteredRequests[index - 1]!.status : null;
                 const showGroupLabel = request.status !== prevStatus;
                 return (
-                  <div key={request.id}>
+                  <div
+                    key={request.id}
+                    ref={isExpanded ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
+                  >
                     {showGroupLabel && (
                       <div className="sticky top-0 z-10 border-b border-border/30 bg-popover/95 px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/50 backdrop-blur-sm">
                         {request.status === "in_review" ? "In progress" : "Awaiting review"}
@@ -188,6 +197,23 @@ export default function NotificationBell({ onStartReview }: NotificationBellProp
                           }`}
                         >
                           <div className="overflow-hidden">
+                            {request.prBody && (
+                              <p className="mt-1.5 line-clamp-3 text-[11px] leading-relaxed text-muted-foreground/60">
+                                {request.prBody}
+                              </p>
+                            )}
+                            {request.prLabels && request.prLabels.length > 0 && (
+                              <div className="mt-1.5 flex flex-wrap gap-1">
+                                {request.prLabels.map((label) => (
+                                  <span
+                                    key={label}
+                                    className="rounded-full bg-accent px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground/80"
+                                  >
+                                    {label}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                             <div className="flex items-center gap-2 pt-2">
                               <button
                                 type="button"
@@ -231,6 +257,16 @@ export default function NotificationBell({ onStartReview }: NotificationBellProp
           )}
         </div>
       </PopoverPopup>
+      {open &&
+        isMobile &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[51] touch-none"
+            aria-hidden
+            onClick={() => setOpen(false)}
+          />,
+          document.body,
+        )}
     </Popover>
   );
 }

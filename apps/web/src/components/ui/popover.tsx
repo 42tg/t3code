@@ -19,6 +19,7 @@ function PopoverTrigger({ className, children, ...props }: PopoverPrimitive.Trig
 function PopoverPopup({
   children,
   className,
+  positionerClassName,
   side = "bottom",
   align = "center",
   sideOffset = 4,
@@ -27,6 +28,7 @@ function PopoverPopup({
   anchor,
   ...props
 }: PopoverPrimitive.Popup.Props & {
+  positionerClassName?: string;
   side?: PopoverPrimitive.Positioner.Props["side"];
   align?: PopoverPrimitive.Positioner.Props["align"];
   sideOffset?: PopoverPrimitive.Positioner.Props["sideOffset"];
@@ -40,7 +42,7 @@ function PopoverPopup({
         align={align}
         alignOffset={alignOffset}
         anchor={anchor}
-        className="z-50 h-(--positioner-height) w-(--positioner-width) max-w-(--available-width) transition-[top,left,right,bottom,transform] data-instant:transition-none"
+        className={cn("z-50 h-(--positioner-height) w-(--positioner-width) max-w-(--available-width) transition-[top,left,right,bottom,transform] data-instant:transition-none", positionerClassName)}
         data-slot="popover-positioner"
         side={side}
         sideOffset={sideOffset}
