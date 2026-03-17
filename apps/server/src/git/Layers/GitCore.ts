@@ -1188,8 +1188,22 @@ const makeGitCore = Effect.gen(function* () {
       const sanitizedBranch = targetBranch.replace(/\//g, "-");
       const repoName = path.basename(input.cwd);
       const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? "/tmp";
-      const worktreePath =
+      let worktreePath =
         input.path ?? path.join(homeDir, ".t3", "worktrees", repoName, sanitizedBranch);
+      // If the computed path already exists (e.g. from a prior review), deduplicate
+      if (!input.path) {
+        const basePath = worktreePath;
+        let suffix = 2;
+        while (
+          yield* fileSystem.stat(worktreePath).pipe(
+            Effect.map(() => true),
+            Effect.catch(() => Effect.succeed(false)),
+          )
+        ) {
+          worktreePath = `${basePath}-${suffix}`;
+          suffix += 1;
+        }
+      }
       const shouldReuseExistingBranch = input.newBranch
         ? yield* branchExists(input.cwd, input.newBranch)
         : false;
