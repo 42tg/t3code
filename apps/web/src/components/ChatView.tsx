@@ -1171,6 +1171,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
   );
 
   const focusComposer = useCallback(() => {
+    if (window.matchMedia("(pointer: coarse)").matches) return;
     composerEditorRef.current?.focusAtEnd();
   }, []);
   const scheduleComposerFocus = useCallback(() => {
