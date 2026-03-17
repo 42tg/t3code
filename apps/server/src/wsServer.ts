@@ -1152,8 +1152,21 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           body: `**[${c.severity.toUpperCase()}]** ${c.body}`,
         }));
 
-        // Resolve actual HEAD commit SHA — GitHub API requires a real SHA, not "HEAD"
-        const headSha = yield* git.resolveRef(body.cwd, "HEAD");
+        // Get the PR head SHA from GitHub API instead of the local worktree
+        // (worktree git link may be broken if the clone was removed).
+        const headSha = yield* gitHubCli
+          .execute({
+            cwd: body.cwd,
+            args: ["api", `repos/${owner}/${repo}/pulls/${prNumber}`, "--jq", ".head.sha"],
+            timeoutMs: 15_000,
+          })
+          .pipe(
+            Effect.map((r) => r.stdout.trim()),
+            Effect.catch(() =>
+              // Fallback: try local git rev-parse
+              git.resolveRef(body.cwd, "HEAD").pipe(Effect.catch(() => Effect.succeed("HEAD"))),
+            ),
+          );
 
         // Create individual PR review comments for each finding, tracking failures.
         let published = 0;
