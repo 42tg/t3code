@@ -7,6 +7,7 @@ import {
   sanitizeBranchFragment,
   sanitizeFeatureBranchName,
 } from "@t3tools/shared/git";
+import { createTtlCache } from "@t3tools/shared/cache";
 
 import { GitCommandError, GitManagerError } from "../Errors.ts";
 import { GitManager, type GitManagerShape } from "../Services/GitManager.ts";
@@ -361,39 +362,12 @@ function toPullRequestHeadRemoteInfo(pr: {
   };
 }
 
-// ── TTL Cache ─────────────────────────────────────────────────────────
-// Reduces redundant GitHub API calls for data that changes infrequently.
-
-interface TtlCacheEntry<T> {
-  value: T;
-  expiresAt: number;
-}
-
-function createTtlCache<T>(ttlMs: number) {
-  const cache = new Map<string, TtlCacheEntry<T>>();
-  return {
-    get(key: string): T | undefined {
-      const entry = cache.get(key);
-      if (!entry) return undefined;
-      if (Date.now() > entry.expiresAt) {
-        cache.delete(key);
-        return undefined;
-      }
-      return entry.value;
-    },
-    set(key: string, value: T): void {
-      cache.set(key, { value, expiresAt: Date.now() + ttlMs });
-    },
-    invalidate(key: string): void {
-      cache.delete(key);
-    },
-  };
-}
-
 // Cache PR lookups for 60s — the PR state for a branch rarely changes between polls.
 const latestPrCache = createTtlCache<PullRequestInfo | null>(60_000);
 // Cache repository clone URLs for 5 minutes — repo clone URLs are essentially static.
 const repoCloneUrlCache = createTtlCache<{ sshUrl: string; url: string }>(300_000);
+// Cache default branch for 15 minutes — essentially never changes for a given repo.
+const defaultBranchCache = createTtlCache<string | null>(900_000);
 
 export const makeGitManager = Effect.gen(function* () {
   const gitCore = yield* GitCore;
@@ -717,9 +691,14 @@ export const makeGitManager = Effect.gen(function* () {
         }
       }
 
-      const defaultFromGh = yield* gitHubCli
-        .getDefaultBranch({ cwd })
-        .pipe(Effect.catch(() => Effect.succeed(null)));
+      const cachedDefault = defaultBranchCache.get(cwd);
+      if (cachedDefault !== undefined) {
+        return cachedDefault ?? "main";
+      }
+      const defaultFromGh = yield* gitHubCli.getDefaultBranch({ cwd }).pipe(
+        Effect.tap((result) => Effect.sync(() => defaultBranchCache.set(cwd, result))),
+        Effect.catch(() => Effect.succeed(null)),
+      );
       if (defaultFromGh) {
         return defaultFromGh;
       }

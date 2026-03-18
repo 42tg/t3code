@@ -42,6 +42,7 @@ export function gitStatusQueryOptions(cwd: string | null) {
     refetchOnWindowFocus: "always",
     refetchOnReconnect: "always",
     refetchInterval: GIT_STATUS_REFETCH_INTERVAL_MS,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -58,6 +59,7 @@ export function gitBranchesQueryOptions(cwd: string | null) {
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
     refetchInterval: GIT_BRANCHES_REFETCH_INTERVAL_MS,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -110,7 +112,9 @@ export function reviewRequestListQueryOptions(refetchInterval?: number) {
       return api.reviewRequest.list({});
     },
     staleTime: 60_000,
+    refetchOnWindowFocus: true,
     refetchInterval: refetchInterval ?? 120_000,
+    refetchIntervalInBackground: false,
   });
 }
 
