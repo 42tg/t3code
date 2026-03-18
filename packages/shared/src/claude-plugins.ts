@@ -12,6 +12,8 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
+import { getManagedSettingsPath } from "./claude-settings";
+
 export interface ResolvedPlugin {
   readonly pluginId: string;
   readonly marketplaceId: string;
@@ -23,15 +25,25 @@ export interface PluginResolutionOptions {
   readonly cwd?: string;
   /** Override home directory (useful for testing). Defaults to `os.homedir()`. */
   readonly homeDir?: string;
+  /**
+   * Override the managed settings file path (useful for testing).
+   * Pass `null` to disable managed settings entirely.
+   * Defaults to the platform-specific path returned by `getManagedSettingsPath()`.
+   */
+  readonly managedSettingsPath?: string | null;
 }
 
 /**
- * Read and merge `enabledPlugins` from user, project, and local settings files.
- * Later sources override earlier ones (local > project > user).
+ * Read and merge `enabledPlugins` from user, project, local, and managed settings files.
+ * Later sources override earlier ones (managed > local > project > user).
  */
 export function readEnabledPluginKeys(options?: PluginResolutionOptions): Map<string, boolean> {
   const home = options?.homeDir ?? os.homedir();
   const cwd = options?.cwd;
+  const managedPath =
+    options !== undefined && "managedSettingsPath" in options
+      ? (options.managedSettingsPath ?? undefined)
+      : getManagedSettingsPath();
 
   const paths: string[] = [
     path.join(home, ".claude", "settings.json"),
@@ -41,6 +53,7 @@ export function readEnabledPluginKeys(options?: PluginResolutionOptions): Map<st
           path.join(cwd, ".claude", "settings.local.json"),
         ]
       : []),
+    ...(managedPath ? [managedPath] : []),
   ];
 
   const merged = new Map<string, boolean>();

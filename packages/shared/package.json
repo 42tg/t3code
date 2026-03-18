@@ -28,6 +28,10 @@
       "types": "./src/claude-plugins.ts",
       "import": "./src/claude-plugins.ts"
     },
+    "./claude-settings": {
+      "types": "./src/claude-settings.ts",
+      "import": "./src/claude-settings.ts"
+    },
     "./DrainableWorker": {
       "types": "./src/DrainableWorker.ts",
       "import": "./src/DrainableWorker.ts"

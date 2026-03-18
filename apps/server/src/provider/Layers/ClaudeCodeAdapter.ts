@@ -46,6 +46,7 @@ import {
   type ProviderAdapterError,
 } from "../Errors.ts";
 import { resolveEnabledPlugins } from "@t3tools/shared/claude-plugins";
+import { getMergedSettingsEnv } from "@t3tools/shared/claude-settings";
 import { getClaudeContextWindowMode } from "@t3tools/shared/model";
 import { type ReviewCommentRepositoryShape } from "../../persistence/Services/ReviewCommentRepository.ts";
 import { createReviewCommentMcpServer } from "../reviewCommentTools.ts";
@@ -979,8 +980,11 @@ function makeClaudeCodeAdapter(options: ClaudeCodeAdapterLiveOptions) {
             const rawJson = tool.inputJsonChunks.join("");
             // eslint-disable-next-line -- Effect.sync callback, not in generator scope
             parsedToolInput = yield* Effect.sync((): Record<string, unknown> | undefined => {
-              try { return JSON.parse(rawJson) as Record<string, unknown>; }
-              catch { return undefined; }
+              try {
+                return JSON.parse(rawJson) as Record<string, unknown>;
+              } catch {
+                return undefined;
+              }
             });
             if (parsedToolInput) {
               tool.detail = summarizeToolRequest(tool.toolName, parsedToolInput);
@@ -1891,7 +1895,10 @@ function makeClaudeCodeAdapter(options: ClaudeCodeAdapterLiveOptions) {
           settingSources: ["user", "project", "local"],
           includePartialMessages: true,
           canUseTool,
-          env: process.env,
+          env: {
+            ...process.env,
+            ...getMergedSettingsEnv(input.cwd ? { cwd: input.cwd } : undefined),
+          },
           ...(input.cwd ? { additionalDirectories: [input.cwd] } : {}),
           ...(sdkPlugins.length > 0 ? { plugins: sdkPlugins } : {}),
           mcpServers: { "review-comments": reviewCommentMcpServer },
