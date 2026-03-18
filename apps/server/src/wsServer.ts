@@ -1276,6 +1276,39 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         return {};
       }
 
+      case WS_METHODS.reviewRequestSubmit: {
+        const body = stripRequestTag(request.body);
+
+        // Parse owner/repo/number from PR URL
+        const prUrlMatch = body.prUrl.match(/github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)/);
+        if (!prUrlMatch) {
+          return yield* new RouteRequestError({
+            message: "Invalid PR URL format. Expected: https://github.com/owner/repo/pull/123",
+          });
+        }
+        const [, owner, repo, prNumber] = prUrlMatch;
+
+        // Submit the review via GitHub API
+        yield* gitHubCli.execute({
+          cwd: process.cwd(),
+          args: [
+            "api",
+            `repos/${owner}/${repo}/pulls/${prNumber}/reviews`,
+            "-X",
+            "POST",
+            "-f",
+            `event=${body.event}`,
+            "-f",
+            `body=${body.body ?? ""}`,
+          ],
+          timeoutMs: 15_000,
+        });
+
+        // Dismiss the review request after successful submission
+        yield* reviewRequestRepo.updateStatus({ id: body.id, status: "dismissed" });
+        return {};
+      }
+
       default: {
         const _exhaustiveCheck: never = request.body;
         return yield* new RouteRequestError({
