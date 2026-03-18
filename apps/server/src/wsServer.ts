@@ -83,6 +83,23 @@ import { makeServerPushBus } from "./wsServer/pushBus.ts";
 import { makeServerReadiness } from "./wsServer/readiness.ts";
 import { decodeJsonResult, formatSchemaError } from "@t3tools/shared/schemaJson";
 
+// ── TTL cache for PR head SHA (avoids re-fetching on each comment publish) ───
+const prHeadShaCache = new Map<string, { sha: string; expiresAt: number }>();
+const PR_HEAD_SHA_TTL_MS = 120_000; // 2 minutes
+
+function getCachedPrHeadSha(prKey: string): string | null {
+  const entry = prHeadShaCache.get(prKey);
+  if (!entry || Date.now() > entry.expiresAt) {
+    prHeadShaCache.delete(prKey);
+    return null;
+  }
+  return entry.sha;
+}
+
+function setCachedPrHeadSha(prKey: string, sha: string): void {
+  prHeadShaCache.set(prKey, { sha, expiresAt: Date.now() + PR_HEAD_SHA_TTL_MS });
+}
+
 /**
  * ServerShape - Service API for server lifecycle control.
  */
@@ -1152,21 +1169,26 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         }
         const [, owner, repo, prNumber] = prUrlMatch;
 
-        // Get the PR head SHA from GitHub API instead of the local worktree
-        // (worktree git link may be broken if the clone was removed).
-        const headSha = yield* gitHubCli
-          .execute({
-            cwd: body.cwd,
-            args: ["api", `repos/${owner}/${repo}/pulls/${prNumber}`, "--jq", ".head.sha"],
-            timeoutMs: 15_000,
-          })
-          .pipe(
-            Effect.map((r) => r.stdout.trim()),
-            Effect.catch(() =>
-              // Fallback: try local git rev-parse
-              git.resolveRef(body.cwd, "HEAD").pipe(Effect.catch(() => Effect.succeed("HEAD"))),
-            ),
-          );
+        // Get the PR head SHA (cached for 2 minutes to avoid repeated API calls
+        // when publishing multiple comments in the same review session).
+        const prKey = `${owner}/${repo}#${prNumber}`;
+        const cachedSha = getCachedPrHeadSha(prKey);
+        const headSha = cachedSha
+          ? cachedSha
+          : yield* gitHubCli
+              .execute({
+                cwd: body.cwd,
+                args: ["api", `repos/${owner}/${repo}/pulls/${prNumber}`, "--jq", ".head.sha"],
+                timeoutMs: 15_000,
+              })
+              .pipe(
+                Effect.map((r) => r.stdout.trim()),
+                Effect.tap((sha) => Effect.sync(() => setCachedPrHeadSha(prKey, sha))),
+                Effect.catch(() =>
+                  // Fallback: try local git rev-parse
+                  git.resolveRef(body.cwd, "HEAD").pipe(Effect.catch(() => Effect.succeed("HEAD"))),
+                ),
+              );
 
         // Create individual PR review comments, marking each as published on success.
         let published = 0;
