@@ -90,15 +90,6 @@ export function normalizeCustomModelSlugs(
   return normalizedModels;
 }
 
-function normalizeAppSettings(settings: AppSettings): AppSettings {
-  return {
-    ...settings,
-    customCodexModels: normalizeCustomModelSlugs(settings.customCodexModels, "codex"),
-    customClaudeModels: normalizeCustomModelSlugs(settings.customClaudeModels, "claudeCode"),
-    customCursorModels: normalizeCustomModelSlugs(settings.customCursorModels, "cursor"),
-  };
-}
-
 export function getAppModelOptions(
   provider: ProviderKind,
   customModels: readonly string[],

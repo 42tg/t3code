@@ -492,14 +492,14 @@ export function deriveWorkLogEntries(
         createdAt: activity.createdAt,
         label: activity.summary,
         tone: activity.tone === "approval" ? "info" : activity.tone,
-        ...(itemType ? { itemType } : {}),
-        ...(requestKind ? { requestKind } : {}),
-        ...(status ? { status } : {}),
-        ...(toolName ? { toolName } : {}),
-        ...(parentTaskId ? { parentTaskId } : {}),
-        ...(taskId ? { taskId } : {}),
-        ...(itemId ? { itemId } : {}),
       };
+      if (itemType) entry.itemType = itemType;
+      if (requestKind) entry.requestKind = requestKind;
+      if (status) entry.status = status;
+      if (toolName) entry.toolName = toolName;
+      if (parentTaskId) entry.parentTaskId = parentTaskId;
+      if (taskId) entry.taskId = taskId;
+      if (itemId) entry.itemId = itemId;
       if (payload && typeof payload.detail === "string" && payload.detail.length > 0) {
         const detail = stripTrailingExitCode(payload.detail).output;
         if (detail) {

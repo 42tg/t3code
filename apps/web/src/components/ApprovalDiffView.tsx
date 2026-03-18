@@ -130,9 +130,9 @@ const ApprovalFileDiff = memo(function ApprovalFileDiff({
       {!collapsed && (
         <div className="max-h-[40vh] overflow-auto rounded-md border border-border/70">
           {files ? (
-            files.map((fileDiff, index) => (
+            files.map((fileDiff) => (
               <FileDiff
-                key={`${fileDiff.cacheKey ?? index}`}
+                key={fileDiff.cacheKey ?? `${fileDiff.prevName ?? "none"}:${fileDiff.name}`}
                 fileDiff={fileDiff}
                 options={{
                   diffStyle: "unified",

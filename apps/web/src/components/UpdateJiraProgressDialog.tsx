@@ -67,7 +67,7 @@ export function UpdateJiraProgressDialog({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate comment.");
     }
-  }, [ticket.key, ticket.title, generateMutation]);
+  }, [ticket.key, ticket.title, threadId, generateMutation]);
 
   const handleSubmit = useCallback(async () => {
     if (!comment.trim()) return;

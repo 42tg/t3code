@@ -1195,12 +1195,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         const prFiles = yield* gitHubCli
           .execute({
             cwd: body.cwd,
-            args: [
-              "api",
-              `repos/${owner}/${repo}/pulls/${prNumber}/files`,
-              "--jq",
-              ".[].filename",
-            ],
+            args: ["api", `repos/${owner}/${repo}/pulls/${prNumber}/files`, "--jq", ".[].filename"],
             timeoutMs: 15_000,
           })
           .pipe(
@@ -1261,13 +1256,18 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
               // Extract GitHub's error detail from the response body (stdout)
               let ghDetail = "";
               try {
-                const respBody = JSON.parse(r.stdout) as { message?: string; errors?: { message?: string }[] };
+                const respBody = JSON.parse(r.stdout) as {
+                  message?: string;
+                  errors?: { message?: string }[];
+                };
                 const messages = [
                   respBody.message,
                   ...(respBody.errors?.map((e) => e.message).filter(Boolean) ?? []),
                 ].filter(Boolean);
                 if (messages.length > 0) ghDetail = messages.join(": ");
-              } catch { /* response wasn't JSON */ }
+              } catch {
+                /* response wasn't JSON */
+              }
               if (!ghDetail) ghDetail = r.stderr.trim();
               // Add file context so the user knows which file(s) caused the issue
               const files = comments.map((c) => c.file.split("/").pop()).join(", ");

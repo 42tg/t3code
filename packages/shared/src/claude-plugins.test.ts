@@ -185,7 +185,7 @@ describe("resolveEnabledPlugins", () => {
     mkPluginVersion(cacheRoot, "market", "project-plugin", "1.0.0");
 
     const result = resolveEnabledPlugins({ homeDir, cwd });
-    const ids = result.map((p) => p.pluginId).sort();
+    const ids = result.map((p) => p.pluginId).toSorted();
     expect(ids).toEqual(["project-plugin", "user-plugin"]);
   });
 });

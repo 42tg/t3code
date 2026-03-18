@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import type { DiffAnnotation } from "../lib/diffAnnotations";
 import { GitHubIcon } from "./Icons";
-import { ensureNativeApi } from "../nativeApi";
 import { toastManager } from "./ui/toast";
 
 // ── Review comment severity config ──────────────────────────────────
