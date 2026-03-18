@@ -1,7 +1,7 @@
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { cva, type VariantProps } from "class-variance-authority";
-import { PanelLeftCloseIcon, PanelLeftIcon } from "lucide-react";
+import { BellIcon, PanelLeftCloseIcon, PanelLeftIcon } from "lucide-react";
 import * as React from "react";
 import { cn } from "~/lib/utils";
 import { Button } from "~/components/ui/button";
@@ -24,6 +24,9 @@ import {
   resolveSwipeGestureState,
   SWIPE_THRESHOLD,
   type SwipeGestureState,
+  PULL_THRESHOLD,
+  resolvePullGestureState,
+  type PullGestureState,
 } from "./sidebar.swipe.logic";
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
@@ -99,25 +102,68 @@ function SwipeToDismiss({
   onDismiss: () => void;
   side: "left" | "right";
 }) {
+  const containerRef = React.useRef<HTMLDivElement>(null);
   const touchStartRef = React.useRef<{ x: number; y: number } | null>(null);
   const gestureStateRef = React.useRef<SwipeGestureState>("idle");
+
+  const applyTransform = React.useCallback(
+    (dx: number) => {
+      const el = containerRef.current;
+      if (!el) return;
+      // Only translate in the closing direction
+      const offset = side === "left" ? Math.min(0, dx) : Math.max(0, dx);
+      if (offset === 0) {
+        el.style.transform = "";
+        el.style.opacity = "";
+      } else {
+        el.style.transform = `translateX(${offset}px)`;
+        el.style.opacity = String(Math.max(0.4, 1 - Math.abs(offset) / 280));
+      }
+    },
+    [side],
+  );
+
+  const resetTransform = React.useCallback((animated: boolean) => {
+    const el = containerRef.current;
+    if (!el) return;
+    if (animated) {
+      el.style.transition = "transform 0.2s ease-out, opacity 0.2s ease-out";
+      el.style.transform = "";
+      el.style.opacity = "";
+      const cleanup = () => {
+        el.style.transition = "";
+        el.removeEventListener("transitionend", cleanup);
+      };
+      el.addEventListener("transitionend", cleanup);
+    } else {
+      el.style.transition = "";
+      el.style.transform = "";
+      el.style.opacity = "";
+    }
+  }, []);
 
   const handleTouchStart = React.useCallback((e: React.TouchEvent) => {
     const touch = e.touches[0];
     if (!touch) return;
     touchStartRef.current = { x: touch.clientX, y: touch.clientY };
     gestureStateRef.current = "idle";
+    if (containerRef.current) containerRef.current.style.transition = "";
   }, []);
 
-  const handleTouchMove = React.useCallback((e: React.TouchEvent) => {
-    const touch = e.touches[0];
-    const start = touchStartRef.current;
-    if (!touch || !start) return;
-    gestureStateRef.current = resolveSwipeGestureState(gestureStateRef.current, {
-      dx: touch.clientX - start.x,
-      dy: touch.clientY - start.y,
-    });
-  }, []);
+  const handleTouchMove = React.useCallback(
+    (e: React.TouchEvent) => {
+      const touch = e.touches[0];
+      const start = touchStartRef.current;
+      if (!touch || !start) return;
+      const dx = touch.clientX - start.x;
+      const dy = touch.clientY - start.y;
+      gestureStateRef.current = resolveSwipeGestureState(gestureStateRef.current, { dx, dy });
+      if (gestureStateRef.current === "swiping") {
+        applyTransform(dx);
+      }
+    },
+    [applyTransform],
+  );
 
   const handleTouchEnd = React.useCallback(
     (e: React.TouchEvent) => {
@@ -125,7 +171,10 @@ function SwipeToDismiss({
       const start = touchStartRef.current;
       touchStartRef.current = null;
 
-      if (!touch || !start || gestureStateRef.current !== "swiping") return;
+      if (!touch || !start || gestureStateRef.current !== "swiping") {
+        resetTransform(true);
+        return;
+      }
 
       const dx = touch.clientX - start.x;
       // Sidebar opens from left → swipe left (negative dx) to close
@@ -133,15 +182,19 @@ function SwipeToDismiss({
       const shouldDismiss = side === "left" ? dx < -SWIPE_THRESHOLD : dx > SWIPE_THRESHOLD;
 
       if (shouldDismiss) {
+        resetTransform(false); // Sheet handles its own close animation
         onDismiss();
+      } else {
+        resetTransform(true); // Snap back
       }
     },
-    [onDismiss, side],
+    [onDismiss, resetTransform, side],
   );
 
   return (
     <div
-      className="h-full w-full"
+      ref={containerRef}
+      className="h-full w-full shadow-[1px_0_0_0_rgba(0,0,0,0.75),2px_0_4px_0px_rgba(0,0,0,0.1)]"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -726,9 +779,10 @@ function SidebarRail({
 
 const SWIPE_OPEN_EDGE_PX = 80;
 
-function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
+function SidebarInset({ className, children, ...props }: React.ComponentProps<"main">) {
   const { isMobile, setOpenMobile } = useSidebar();
 
+  const edgeIndicatorRef = React.useRef<HTMLDivElement>(null);
   const touchStartRef = React.useRef<{ x: number; y: number } | null>(null);
   const gestureStateRef = React.useRef<SwipeGestureState>("idle");
 
@@ -749,10 +803,17 @@ function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
     const touch = e.touches[0];
     const start = touchStartRef.current;
     if (!touch || !start) return;
-    gestureStateRef.current = resolveSwipeGestureState(gestureStateRef.current, {
-      dx: touch.clientX - start.x,
-      dy: touch.clientY - start.y,
-    });
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    gestureStateRef.current = resolveSwipeGestureState(gestureStateRef.current, { dx, dy });
+    const el = edgeIndicatorRef.current;
+    if (el && gestureStateRef.current === "swiping" && dx > 0) {
+      const progress = Math.min(dx / SWIPE_THRESHOLD, 1);
+      // Reach full opacity quickly so the background looks solid
+      el.style.opacity = String(Math.min(progress * 2, 1));
+      // Follow the finger directly, cap at half screen width
+      el.style.width = `${Math.min(dx, window.innerWidth * 0.5)}px`;
+    }
   }, []);
 
   const handleTouchEnd = React.useCallback(
@@ -760,6 +821,11 @@ function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
       const touch = e.changedTouches[0];
       const start = touchStartRef.current;
       touchStartRef.current = null;
+      const el = edgeIndicatorRef.current;
+      if (el) {
+        el.style.opacity = "0";
+        el.style.width = "4px";
+      }
       if (!touch || !start || gestureStateRef.current !== "swiping") return;
       const dx = touch.clientX - start.x;
       if (dx > SWIPE_THRESHOLD) {
@@ -781,7 +847,16 @@ function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       {...props}
-    />
+    >
+      {/* Left-edge peek that grows while swiping to open the sidebar */}
+      <div
+        ref={edgeIndicatorRef}
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 left-0 z-10 bg-popover shadow-[inset_-1px_0_0_0_rgba(0,0,0,0.75),2px_0_4px_0_rgba(0,0,0,0.1)] transition-none"
+        style={{ opacity: 0, width: "4px" }}
+      />
+      {children}
+    </main>
   );
 }
 
@@ -1144,6 +1219,106 @@ function SidebarMenuSubButton({
   });
 }
 
+function PullToReveal({
+  children,
+  onPull,
+  disabled = false,
+}: {
+  children: React.ReactNode;
+  onPull: () => void;
+  disabled?: boolean;
+}) {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const indicatorRef = React.useRef<HTMLDivElement>(null);
+  const touchStartRef = React.useRef<{ x: number; y: number } | null>(null);
+  const gestureRef = React.useRef<PullGestureState>("idle");
+  const pullYRef = React.useRef(0);
+
+  const getScrollTop = React.useCallback(() => {
+    if (!containerRef.current) return 0;
+    const viewport = containerRef.current.querySelector<HTMLElement>(
+      '[data-slot="scroll-area-viewport"]',
+    );
+    return viewport?.scrollTop ?? 0;
+  }, []);
+
+  const updateIndicator = React.useCallback((dy: number) => {
+    const el = indicatorRef.current;
+    if (!el) return;
+    const progress = Math.min(Math.max(dy, 0) / PULL_THRESHOLD, 1);
+    el.style.opacity = String(progress);
+    el.style.transform = `translateY(${-8 + progress * 12}px)`;
+    const icon = el.firstElementChild as HTMLElement | null;
+    if (icon) icon.style.transform = `scale(${0.7 + progress * 0.3})`;
+  }, []);
+
+  const handleTouchStart = React.useCallback(
+    (e: React.TouchEvent) => {
+      if (disabled) return;
+      const touch = e.touches[0];
+      if (!touch) return;
+      if (getScrollTop() > 0) return;
+      touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+      gestureRef.current = "idle";
+      pullYRef.current = 0;
+    },
+    [disabled, getScrollTop],
+  );
+
+  const handleTouchMove = React.useCallback(
+    (e: React.TouchEvent) => {
+      const touch = e.touches[0];
+      const start = touchStartRef.current;
+      if (!touch || !start) return;
+      const dx = touch.clientX - start.x;
+      const dy = touch.clientY - start.y;
+      gestureRef.current = resolvePullGestureState(gestureRef.current, { dx, dy });
+      if (gestureRef.current === "pulling") {
+        pullYRef.current = Math.min(dy, PULL_THRESHOLD);
+        updateIndicator(dy);
+      } else if (gestureRef.current === "cancelled") {
+        updateIndicator(0);
+      }
+    },
+    [updateIndicator],
+  );
+
+  const handleTouchEnd = React.useCallback(
+    (_e: React.TouchEvent) => {
+      const finalPullY = pullYRef.current;
+      pullYRef.current = 0;
+      updateIndicator(0);
+      if (gestureRef.current !== "pulling") return;
+      touchStartRef.current = null;
+      if (finalPullY >= PULL_THRESHOLD) {
+        onPull();
+      }
+    },
+    [onPull, updateIndicator],
+  );
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative flex min-h-0 flex-1 flex-col"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* Pull indicator — bell icon that fades + slides in as user pulls */}
+      <div
+        ref={indicatorRef}
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center transition-none"
+        style={{ opacity: 0, transform: "translateY(-8px)" }}
+      >
+        <BellIcon className="size-4 text-muted-foreground/60" />
+      </div>
+      {children}
+    </div>
+  );
+}
+
 export {
   Sidebar,
   SidebarContent,
@@ -1169,4 +1344,5 @@ export {
   SidebarSeparator,
   SidebarTrigger,
   useSidebar,
+  PullToReveal,
 };

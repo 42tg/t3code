@@ -83,6 +83,7 @@ import {
   SidebarSeparator,
   SidebarTrigger,
   useSidebar,
+  PullToReveal,
 } from "./ui/sidebar";
 import { useThreadSelectionStore } from "../threadSelectionStore";
 import { formatWorktreePathForDisplay, getOrphanedWorktreePathForThread } from "../worktreeCleanup";
@@ -395,6 +396,7 @@ function SortableProjectItem({
 
 export default function Sidebar() {
   const { isMobile, setOpenMobile } = useSidebar();
+  const [notifOpen, setNotifOpen] = useState(false);
   const projects = useStore((store) => store.projects);
   const threads = useStore((store) => store.threads);
   const markThreadUnread = useStore((store) => store.markThreadUnread);
@@ -1378,6 +1380,8 @@ export default function Sidebar() {
             {wordmark}
             <div className="ml-auto flex items-center gap-1">
               <NotificationBell
+                open={notifOpen}
+                onOpenChange={setNotifOpen}
                 onStartReview={(prUrl, requestId) => {
                   setPendingReviewRequest({ prUrl, requestId });
                   setStandaloneReviewOpen(true);
@@ -1410,6 +1414,8 @@ export default function Sidebar() {
           {wordmark}
           <div className="ml-auto">
             <NotificationBell
+              open={notifOpen}
+              onOpenChange={setNotifOpen}
               onStartReview={(prUrl, requestId) => {
                 setPendingReviewRequest({ prUrl, requestId });
                 setStandaloneReviewOpen(true);
@@ -1419,6 +1425,7 @@ export default function Sidebar() {
         </SidebarHeader>
       )}
 
+      <PullToReveal onPull={() => setNotifOpen(true)} disabled={!isMobile}>
       <SidebarContent className="gap-0">
         {showArm64IntelBuildWarning && arm64IntelBuildWarningDescription ? (
           <SidebarGroup className="px-2 pt-2 pb-0">
@@ -1936,6 +1943,7 @@ export default function Sidebar() {
           )}
         </SidebarGroup>
       </SidebarContent>
+      </PullToReveal>
 
       <SidebarSeparator />
       <SidebarFooter className="p-2">

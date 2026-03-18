@@ -36,3 +36,37 @@ export function resolveSwipeGestureState(
 
   return "idle";
 }
+
+// --- Pull-to-reveal (vertical) gesture ---
+
+export const PULL_THRESHOLD = 64;
+// Minimum downward movement before locking in as a pull gesture
+const PULL_LOCK_PY = 16;
+// Vertical movement must be this many times greater than horizontal
+const PULL_AXIS_RATIO = 1.5;
+
+export type PullGestureState = "idle" | "pulling" | "cancelled";
+
+/**
+ * Pure state transition for pull-down gesture detection.
+ * Mirrors resolveSwipeGestureState but for the vertical axis.
+ *
+ * Rules:
+ * 1. Already committed → terminal, return as-is
+ * 2. Horizontal movement too large → treat as swipe, cancel
+ * 3. Upward movement → cancel
+ * 4. Downward movement exceeds lock-in and dominates horizontal → lock in as pull
+ * 5. Otherwise → remain idle
+ */
+export function resolvePullGestureState(
+  current: PullGestureState,
+  delta: { dx: number; dy: number },
+): PullGestureState {
+  if (current !== "idle") return current;
+  if (Math.abs(delta.dx) > SWIPE_LOCK_PX) return "cancelled";
+  if (delta.dy < 0) return "cancelled";
+  if (delta.dy > PULL_LOCK_PY && delta.dy > Math.abs(delta.dx) * PULL_AXIS_RATIO) {
+    return "pulling";
+  }
+  return "idle";
+}

@@ -17,10 +17,22 @@ const emptyRequests: ReviewRequest[] = [];
 
 interface NotificationBellProps {
   onStartReview: (prUrl: string, requestId: string) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export default function NotificationBell({ onStartReview }: NotificationBellProps) {
-  const [open, setOpen] = useState(false);
+export default function NotificationBell({
+  onStartReview,
+  open: controlledOpen,
+  onOpenChange,
+}: NotificationBellProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = (value: boolean) => {
+    if (!isControlled) setInternalOpen(value);
+    onOpenChange?.(value);
+  };
   const [filter, setFilter] = useState<Filter>("reviews");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const { isMobile, setOpenMobile } = useSidebar();
