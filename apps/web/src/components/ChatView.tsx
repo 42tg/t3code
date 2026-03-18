@@ -1716,14 +1716,31 @@ export default function ChatView({ threadId }: ChatViewProps) {
   useLayoutEffect(() => {
     if (!activeThread?.id) return;
     shouldAutoScrollRef.current = true;
-    scheduleStickToBottom();
+    const scrollContainer = messagesScrollRef.current;
+    if (scrollContainer) {
+      // Scroll synchronously before the browser paints so the first frame
+      // shows the correct (bottom) position rather than the previous thread's
+      // scroll offset.
+      scrollContainer.scrollTo({ top: scrollContainer.scrollHeight });
+      lastKnownScrollTopRef.current = scrollContainer.scrollTop;
+      // Fade the messages area in so the thread switch feels smooth rather
+      // than an abrupt content swap.
+      scrollContainer.style.opacity = "0";
+      scrollContainer.style.transition = "none";
+    }
+    const fadeFrame = window.requestAnimationFrame(() => {
+      if (scrollContainer) {
+        scrollContainer.style.transition = "opacity 120ms ease-out";
+        scrollContainer.style.opacity = "1";
+      }
+    });
     const timeout = window.setTimeout(() => {
-      const scrollContainer = messagesScrollRef.current;
       if (!scrollContainer) return;
       if (isScrollContainerNearBottom(scrollContainer)) return;
       scheduleStickToBottom();
     }, 96);
     return () => {
+      window.cancelAnimationFrame(fadeFrame);
       window.clearTimeout(timeout);
     };
   }, [activeThread?.id, scheduleStickToBottom]);
@@ -1863,7 +1880,18 @@ export default function ChatView({ threadId }: ChatViewProps) {
     dragDepthRef.current = 0;
     setIsDragOverComposer(false);
     setExpandedImage(null);
-  }, [threadId]);
+    // Reset request-response state that is scoped to a thread session
+    setRespondingRequestIds([]);
+    setRespondingUserInputRequestIds([]);
+    setPendingUserInputAnswersByRequestId({});
+    setPendingUserInputQuestionIndexByRequestId({});
+    // Clean up attachment preview blob URLs and timeouts from the previous thread
+    clearAttachmentPreviewHandoffs();
+    // Reset in-flight send guard so the new thread can send immediately
+    sendInFlightRef.current = false;
+    // Release any stuck composer select lock from the previous thread
+    composerSelectLockRef.current = false;
+  }, [threadId, clearAttachmentPreviewHandoffs]);
 
   useEffect(() => {
     let cancelled = false;
