@@ -1,6 +1,7 @@
 import {
   type MemoryCategory,
   type MemoryCreateInput,
+  type MemoryExtractInput,
   MemoryId,
   type MemoryUpdateInput,
   type ProjectId,
@@ -128,6 +129,19 @@ export function memoryDeleteMutationOptions(queryClient: QueryClient) {
     mutationFn: async (memoryId: string) => {
       const api = ensureNativeApi();
       return api.memory.delete({ memoryId: MemoryId.makeUnsafe(memoryId) });
+    },
+    onSettled: async () => {
+      await invalidateMemoryQueries(queryClient);
+    },
+  });
+}
+
+export function memoryExtractMutationOptions(queryClient: QueryClient) {
+  return mutationOptions({
+    mutationKey: ["memories", "mutation", "extract"] as const,
+    mutationFn: async (input: MemoryExtractInput) => {
+      const api = ensureNativeApi();
+      return api.memory.extract(input);
     },
     onSettled: async () => {
       await invalidateMemoryQueries(queryClient);

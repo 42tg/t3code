@@ -1,6 +1,7 @@
 import {
   TrimmedNonEmptyString,
   type MemoryCategory,
+  type MemoryDate,
   type MemoryScope,
   type ProjectId,
 } from "@t3tools/contracts";
@@ -33,6 +34,7 @@ const CATEGORY_OPTIONS: { value: MemoryCategory; label: string }[] = [
 const SCOPE_OPTIONS: { value: MemoryScope; label: string; description: string }[] = [
   { value: "project", label: "Project", description: "Only available in this project" },
   { value: "global", label: "Global", description: "Available across all projects" },
+  { value: "daily", label: "Daily", description: "Scoped to today's date" },
 ];
 
 interface MemoryCreateDialogProps {
@@ -63,11 +65,12 @@ export function MemoryCreateDialog({ projectId, open, onOpenChange }: MemoryCrea
       if (!title.trim() || !content.trim()) return;
 
       await createMutation.mutateAsync({
-        projectId: scope === "project" ? projectId : undefined,
+        projectId: scope !== "global" ? projectId : undefined,
         scope,
         category,
         title: TrimmedNonEmptyString.makeUnsafe(title.trim()),
         content: TrimmedNonEmptyString.makeUnsafe(content.trim()),
+        ...(scope === "daily" ? { date: new Date().toISOString().slice(0, 10) as MemoryDate } : {}),
       });
 
       resetForm();

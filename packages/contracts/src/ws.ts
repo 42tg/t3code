@@ -74,6 +74,7 @@ import {
   MemoryListInput,
   MemorySearchInput,
   MemoryGetForThreadInput,
+  MemoryExtractInput,
 } from "./memory";
 
 // ── WebSocket RPC Method Names ───────────────────────────────────────
@@ -150,6 +151,7 @@ export const WS_METHODS = {
   memoryArchive: "memory.archive",
   memoryDelete: "memory.delete",
   memoryGetForThread: "memory.getForThread",
+  memoryExtract: "memory.extract",
 
   // Server meta
   serverGetConfig: "server.getConfig",
@@ -255,6 +257,7 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.memoryArchive, MemoryArchiveInput),
   tagRequestBody(WS_METHODS.memoryDelete, MemoryDeleteInput),
   tagRequestBody(WS_METHODS.memoryGetForThread, MemoryGetForThreadInput),
+  tagRequestBody(WS_METHODS.memoryExtract, MemoryExtractInput),
 
   // Server meta
   tagRequestBody(WS_METHODS.serverGetConfig, Schema.Struct({})),

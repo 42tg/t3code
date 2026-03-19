@@ -1,9 +1,13 @@
 import { Schema } from "effect";
 import { NonNegativeInt, ProjectId, ThreadId, TrimmedNonEmptyString, TurnId } from "./baseSchemas";
 
+/** ISO date string (YYYY-MM-DD) for daily-scoped memories. */
+export const MemoryDate = Schema.String.pipe(Schema.brand("MemoryDate"));
+export type MemoryDate = typeof MemoryDate.Type;
+
 // ── Domain Enums ────────────────────────────────────────────────────
 
-export const MemoryScope = Schema.Literals(["project", "global"]);
+export const MemoryScope = Schema.Literals(["project", "global", "daily"]);
 export type MemoryScope = typeof MemoryScope.Type;
 
 export const MemoryCategory = Schema.Literals([
@@ -31,6 +35,8 @@ export const Memory = Schema.Struct({
   source: MemorySource,
   content: TrimmedNonEmptyString,
   title: TrimmedNonEmptyString,
+  /** ISO date (YYYY-MM-DD) — required when scope is "daily". */
+  date: Schema.optional(MemoryDate),
   sourceThreadId: Schema.optional(ThreadId),
   sourceTurnId: Schema.optional(TurnId),
   relevanceScore: Schema.Number,
@@ -48,8 +54,12 @@ export const MemoryCreateInput = Schema.Struct({
   projectId: Schema.optional(ProjectId),
   scope: MemoryScope,
   category: MemoryCategory,
+  /** Defaults to "manual" when omitted. */
+  source: Schema.optional(MemorySource),
   content: TrimmedNonEmptyString,
   title: TrimmedNonEmptyString,
+  /** ISO date (YYYY-MM-DD) — required when scope is "daily". */
+  date: Schema.optional(MemoryDate),
   sourceThreadId: Schema.optional(ThreadId),
   sourceTurnId: Schema.optional(TurnId),
 });
@@ -100,6 +110,14 @@ export const MemoryGetForThreadInput = Schema.Struct({
 });
 export type MemoryGetForThreadInput = typeof MemoryGetForThreadInput.Type;
 
+export const MemoryExtractInput = Schema.Struct({
+  /** ISO 8601 datetime — collect threads updated since this time. */
+  sinceDate: Schema.String,
+  /** Optional: limit extraction to a single project. */
+  projectId: Schema.optional(ProjectId),
+});
+export type MemoryExtractInput = typeof MemoryExtractInput.Type;
+
 // ── WS Results ──────────────────────────────────────────────────────
 
 export const MemoryCreateResult = Schema.Struct({
@@ -117,3 +135,10 @@ export const MemorySearchResult = Schema.Struct({
   memories: Schema.Array(Memory),
 });
 export type MemorySearchResult = typeof MemorySearchResult.Type;
+
+export const MemoryExtractResult = Schema.Struct({
+  extractedCount: NonNegativeInt,
+  skippedDuplicates: NonNegativeInt,
+  projectsProcessed: NonNegativeInt,
+});
+export type MemoryExtractResult = typeof MemoryExtractResult.Type;

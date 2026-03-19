@@ -64,6 +64,7 @@ import { GitCore } from "./git/Services/GitCore.ts";
 import { ReviewCommentRepository } from "./persistence/Services/ReviewCommentRepository.ts";
 import { ReviewRequestRepository } from "./persistence/Services/ReviewRequestRepository.ts";
 import { MemoryRepository } from "./persistence/Services/MemoryRepository.ts";
+import { MemoryExtraction } from "./memory/Services/MemoryExtraction.ts";
 import { GitHubCli } from "./git/Services/GitHubCli.ts";
 import { tryHandleProjectFaviconRequest } from "./projectFaviconRoute";
 import {
@@ -286,7 +287,8 @@ export type ServerRuntimeServices =
   | AnalyticsService
   | ReviewCommentRepository
   | ReviewRequestRepository
-  | MemoryRepository;
+  | MemoryRepository
+  | MemoryExtraction;
 
 export class ServerLifecycleError extends Schema.TaggedErrorClass<ServerLifecycleError>()(
   "ServerLifecycleError",
@@ -330,6 +332,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const reviewCommentRepo = yield* ReviewCommentRepository;
   const reviewRequestRepo = yield* ReviewRequestRepository;
   const memoryRepo = yield* MemoryRepository;
+  const memoryExtraction = yield* MemoryExtraction;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
 
@@ -1515,6 +1518,11 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         const body = stripRequestTag(request.body);
         const memories = yield* memoryRepo.getRelevantForThread(body);
         return { memories };
+      }
+
+      case WS_METHODS.memoryExtract: {
+        const body = stripRequestTag(request.body);
+        return yield* memoryExtraction.extract(body);
       }
 
       default: {

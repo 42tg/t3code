@@ -8,11 +8,12 @@ export default Effect.gen(function* () {
     CREATE TABLE IF NOT EXISTS projection_memories (
       memory_id TEXT PRIMARY KEY,
       project_id TEXT,
-      scope TEXT NOT NULL CHECK (scope IN ('project', 'global')),
+      scope TEXT NOT NULL CHECK (scope IN ('project', 'global', 'daily')),
       category TEXT NOT NULL CHECK (category IN ('preference', 'pattern', 'decision', 'fact', 'convention')),
       source TEXT NOT NULL CHECK (source IN ('auto', 'manual')),
       content TEXT NOT NULL,
       title TEXT NOT NULL,
+      date TEXT,
       source_thread_id TEXT,
       source_turn_id TEXT,
       relevance_score REAL NOT NULL DEFAULT 1.0,
@@ -79,5 +80,12 @@ export default Effect.gen(function* () {
   yield* sql`
     CREATE INDEX IF NOT EXISTS idx_memories_project_active
     ON projection_memories(project_id, archived_at, updated_at DESC)
+  `;
+
+  /* Index for daily-scoped memories filtered by date. */
+  yield* sql`
+    CREATE INDEX IF NOT EXISTS idx_memories_daily_date
+    ON projection_memories(project_id, date DESC)
+    WHERE scope = 'daily'
   `;
 });

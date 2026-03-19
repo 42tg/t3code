@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArchiveIcon,
   BrainIcon,
+  CalendarIcon,
   PlusIcon,
   SearchIcon,
   Trash2Icon,
@@ -24,6 +25,7 @@ import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { MemoryCreateDialog } from "./MemoryCreateDialog";
+import { MemoryExtractDialog } from "./MemoryExtractDialog";
 
 const CATEGORY_LABELS: Record<MemoryCategory, string> = {
   preference: "Preference",
@@ -59,6 +61,7 @@ export const MemoryPanel = memo(function MemoryPanel({ projectId }: MemoryPanelP
   const deferredSearch = useDeferredValue(searchQuery);
   const [selectedCategory, setSelectedCategory] = useState<MemoryCategory | undefined>(undefined);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [extractDialogOpen, setExtractDialogOpen] = useState(false);
 
   const isSearching = deferredSearch.length > 0;
 
@@ -117,10 +120,16 @@ export const MemoryPanel = memo(function MemoryPanel({ projectId }: MemoryPanelP
             </Badge>
           )}
         </div>
-        <Button size="xs" variant="outline" onClick={() => setCreateDialogOpen(true)}>
-          <PlusIcon className="size-3" />
-          Add
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button size="xs" variant="outline" onClick={() => setExtractDialogOpen(true)}>
+            <SparklesIcon className="size-3" />
+            Extract
+          </Button>
+          <Button size="xs" variant="outline" onClick={() => setCreateDialogOpen(true)}>
+            <PlusIcon className="size-3" />
+            Add
+          </Button>
+        </div>
       </div>
 
       {/* Search */}
@@ -200,6 +209,13 @@ export const MemoryPanel = memo(function MemoryPanel({ projectId }: MemoryPanelP
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
       />
+
+      {/* Extract dialog */}
+      <MemoryExtractDialog
+        projectId={projectId}
+        open={extractDialogOpen}
+        onOpenChange={setExtractDialogOpen}
+      />
     </div>
   );
 });
@@ -255,15 +271,21 @@ const MemoryItem = memo(function MemoryItem({ memory, onArchive, onDelete }: Mem
                 <Badge variant="outline" size="sm" className="gap-0.5">
                   {memory.scope === "global" ? (
                     <GlobeIcon className="size-2.5" />
+                  ) : memory.scope === "daily" ? (
+                    <CalendarIcon className="size-2.5" />
                   ) : (
                     <FolderIcon className="size-2.5" />
                   )}
-                  {memory.scope}
+                  {memory.scope === "daily" && memory.date ? memory.date : memory.scope}
                 </Badge>
               }
             />
             <TooltipPopup side="bottom">
-              {memory.scope === "global" ? "Available in all projects" : "Project-specific memory"}
+              {memory.scope === "global"
+                ? "Available in all projects"
+                : memory.scope === "daily"
+                  ? `Daily memory for ${memory.date ?? "today"}`
+                  : "Project-specific memory"}
             </TooltipPopup>
           </Tooltip>
 

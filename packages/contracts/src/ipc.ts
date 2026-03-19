@@ -104,6 +104,8 @@ import type {
   MemorySearchInput,
   MemorySearchResult,
   MemoryGetForThreadInput,
+  MemoryExtractInput,
+  MemoryExtractResult,
 } from "./memory";
 
 export interface ContextMenuItem<T extends string = string> {
@@ -256,6 +258,7 @@ export interface NativeApi {
     archive: (input: MemoryArchiveInput) => Promise<void>;
     delete: (input: MemoryDeleteInput) => Promise<void>;
     getForThread: (input: MemoryGetForThreadInput) => Promise<MemorySearchResult>;
+    extract: (input: MemoryExtractInput) => Promise<MemoryExtractResult>;
   };
   contextMenu: {
     show: <T extends string>(

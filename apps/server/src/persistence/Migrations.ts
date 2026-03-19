@@ -31,6 +31,7 @@ import Migration0016 from "./Migrations/016_ReviewComments.ts";
 import Migration0017 from "./Migrations/017_ReviewRequests.ts";
 import Migration0018 from "./Migrations/018_ReviewRequestsPrMeta.ts";
 import Migration0019 from "./Migrations/019_Memories.ts";
+import Migration0020 from "./Migrations/020_MemoriesDateColumn.ts";
 import { Effect } from "effect";
 
 /**
@@ -63,6 +64,7 @@ const loader = Migrator.fromRecord({
   "17_ReviewRequests": Migration0017,
   "18_ReviewRequestsPrMeta": Migration0018,
   "19_Memories": Migration0019,
+  "20_MemoriesDateColumn": Migration0020,
 });
 
 /**

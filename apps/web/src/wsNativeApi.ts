@@ -188,6 +188,7 @@ export function createWsNativeApi(): NativeApi {
       archive: (input) => transport.request(WS_METHODS.memoryArchive, input),
       delete: (input) => transport.request(WS_METHODS.memoryDelete, input),
       getForThread: (input) => transport.request(WS_METHODS.memoryGetForThread, input),
+      extract: (input) => transport.request(WS_METHODS.memoryExtract, input),
     },
     contextMenu: {
       show: async <T extends string>(
