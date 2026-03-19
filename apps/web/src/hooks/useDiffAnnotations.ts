@@ -60,7 +60,9 @@ export function useDiffAnnotations(
         commentId: comment.id,
       });
       if (!result.published || result.published === 0) {
-        throw new Error(result.error ?? "GitHub rejected the comment — check your permissions and PR access.");
+        throw new Error(
+          result.error ?? "GitHub rejected the comment — check your permissions and PR access.",
+        );
       }
       await invalidateReviewCommentQueries(queryClient, threadId);
     },
@@ -75,9 +77,11 @@ export function useDiffAnnotations(
     // Only allow publishing for comments on files that are part of the PR diff.
     // If diffFiles is not available (e.g. no branch diff loaded), allow all.
     const canPublish = publishContext ? onPublish : undefined;
-    const perCommentPublish = canPublish && diffFiles
-      ? (comment: ReviewComment) => diffFiles.has(normalizeFilePath(comment.file)) ? canPublish : undefined
-      : () => canPublish;
+    const perCommentPublish =
+      canPublish && diffFiles
+        ? (comment: ReviewComment) =>
+            diffFiles.has(normalizeFilePath(comment.file)) ? canPublish : undefined
+        : () => canPublish;
     return reviewCommentsToAnnotations(comments, perCommentPublish);
     // Future: concat with lint annotations, AI suggestion annotations, etc.
   }, [reviewCommentsQuery.data?.comments, publishContext, onPublish, diffFiles]);
