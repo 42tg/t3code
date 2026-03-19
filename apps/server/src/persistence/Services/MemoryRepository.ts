@@ -63,7 +63,7 @@ export interface MemoryRepositoryShape {
   ) => Effect.Effect<void, MemoryRepositoryError>;
 
   /**
-   * List all memories for a project (optionally including global memories).
+   * List all memories for a project (optionally including thread-scope memories).
    *
    * Returned ordered by updated_at descending.
    */
@@ -83,7 +83,7 @@ export interface MemoryRepositoryShape {
   /**
    * Get memories relevant to a thread's project context.
    *
-   * Combines project-scoped + global memories, optionally filtered by query.
+   * Combines project-scoped + thread-scoped memories, optionally filtered by query.
    */
   readonly getRelevantForThread: (
     input: typeof MemoryGetForThreadInput.Type,
@@ -93,6 +93,25 @@ export interface MemoryRepositoryShape {
    * Record an access to a memory (increment counter + update timestamp).
    */
   readonly recordAccess: (memoryId: string) => Effect.Effect<void, MemoryRepositoryError>;
+
+  /**
+   * Find the thread-scope summary memory for a given thread, if it exists.
+   */
+  readonly findThreadSummary: (
+    threadId: string,
+  ) => Effect.Effect<Memory | null, MemoryRepositoryError>;
+
+  /**
+   * Create or replace the thread summary memory for a given thread.
+   *
+   * Uses DELETE + INSERT to upsert based on the unique thread_id index (scope='thread').
+   */
+  readonly upsertThreadSummary: (input: {
+    threadId: string;
+    projectId: string;
+    title: string;
+    content: string;
+  }) => Effect.Effect<Memory, MemoryRepositoryError>;
 }
 
 /**

@@ -33,7 +33,7 @@ const CATEGORY_OPTIONS: { value: MemoryCategory; label: string }[] = [
 
 const SCOPE_OPTIONS: { value: MemoryScope; label: string; description: string }[] = [
   { value: "project", label: "Project", description: "Only available in this project" },
-  { value: "global", label: "Global", description: "Available across all projects" },
+  { value: "thread", label: "Thread", description: "Summary of a conversation thread" },
   { value: "daily", label: "Daily", description: "Scoped to today's date" },
 ];
 
@@ -65,7 +65,7 @@ export function MemoryCreateDialog({ projectId, open, onOpenChange }: MemoryCrea
       if (!title.trim() || !content.trim()) return;
 
       await createMutation.mutateAsync({
-        projectId: scope !== "global" ? projectId : undefined,
+        projectId: scope === "project" || scope === "daily" ? projectId : undefined,
         scope,
         category,
         title: TrimmedNonEmptyString.makeUnsafe(title.trim()),

@@ -10,7 +10,6 @@ import type {
   MemoryCategory,
   MemoryDate,
   Memory,
-  OrchestrationMessage,
   OrchestrationProject,
   OrchestrationThread,
   ProjectId,
@@ -132,14 +131,7 @@ function parseDailySummary(raw: unknown): DailySummaryResult {
   return { entries };
 }
 
-// ── Thread → transcript conversion ────────────────────────────────
-
-function threadToTranscript(thread: OrchestrationThread) {
-  const messages = thread.messages
-    .filter((m: OrchestrationMessage) => !m.streaming && m.text.trim().length > 0)
-    .map((m: OrchestrationMessage) => ({ role: m.role, text: m.text }));
-  return { threadTitle: thread.title, messages };
-}
+import { threadToTranscript } from "../threadTranscript.ts";
 
 // ── Layer implementation ──────────────────────────────────────────
 
@@ -219,7 +211,7 @@ const makeMemoryExtraction = Effect.gen(function* () {
           const existingResult = yield* memoryRepo
             .listByProject({
               projectId,
-              includeGlobal: false,
+              includeThread: false,
               limit: 500 as typeof NonNegativeInt.Type,
             })
             .pipe(

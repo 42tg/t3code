@@ -3,6 +3,8 @@ import * as SqlSchema from "effect/unstable/sql/SqlSchema";
 import {
   type Memory,
   type MemoryId,
+  type ProjectId,
+  type ThreadId,
   MemoryScope,
   MemoryCategory,
   MemorySource,
@@ -26,6 +28,7 @@ import {
 const MemoryDbRowSchema = Schema.Struct({
   memoryId: TrimmedNonEmptyString,
   projectId: Schema.NullOr(TrimmedNonEmptyString),
+  threadId: Schema.NullOr(TrimmedNonEmptyString),
   scope: MemoryScope,
   category: MemoryCategory,
   source: MemorySource,
@@ -47,6 +50,7 @@ function rowToMemory(row: typeof MemoryDbRowSchema.Type): Memory {
   return {
     memoryId: row.memoryId as MemoryId,
     ...(row.projectId !== null ? { projectId: row.projectId } : {}),
+    ...(row.threadId !== null ? { threadId: row.threadId } : {}),
     scope: row.scope,
     category: row.category,
     source: row.source,
@@ -88,6 +92,7 @@ function sanitizeFts5Query(query: string): string {
 const MEMORY_SELECT_COLUMNS = `
   memory_id AS "memoryId",
   project_id AS "projectId",
+  thread_id AS "threadId",
   scope,
   category,
   source,
@@ -108,6 +113,7 @@ const MEMORY_SELECT_COLUMNS = `
 const MEMORY_SELECT_COLUMNS_PREFIXED = `
   m.memory_id AS "memoryId",
   m.project_id AS "projectId",
+  m.thread_id AS "threadId",
   m.scope,
   m.category,
   m.source,
@@ -131,6 +137,7 @@ const makeMemoryRepository = Effect.gen(function* () {
     Request: Schema.Struct({
       memoryId: TrimmedNonEmptyString,
       projectId: Schema.NullOr(TrimmedNonEmptyString),
+      threadId: Schema.NullOr(TrimmedNonEmptyString),
       scope: MemoryScope,
       category: MemoryCategory,
       source: MemorySource,
@@ -147,6 +154,7 @@ const makeMemoryRepository = Effect.gen(function* () {
         INSERT INTO projection_memories (
           memory_id,
           project_id,
+          thread_id,
           scope,
           category,
           source,
@@ -161,6 +169,7 @@ const makeMemoryRepository = Effect.gen(function* () {
         VALUES (
           ${row.memoryId},
           ${row.projectId},
+          ${row.threadId},
           ${row.scope},
           ${row.category},
           ${row.source},
@@ -182,6 +191,7 @@ const makeMemoryRepository = Effect.gen(function* () {
     const row = {
       memoryId,
       projectId: (input.projectId ?? null) as typeof TrimmedNonEmptyString.Type | null,
+      threadId: (input.threadId ?? null) as typeof TrimmedNonEmptyString.Type | null,
       scope: input.scope,
       category: input.category,
       source: (input.source ?? "manual") as "auto" | "manual",
@@ -206,6 +216,7 @@ const makeMemoryRepository = Effect.gen(function* () {
           ({
             memoryId: memoryId as MemoryId,
             ...(input.projectId !== undefined ? { projectId: input.projectId } : {}),
+            ...(input.threadId !== undefined ? { threadId: input.threadId } : {}),
             scope: input.scope,
             category: input.category,
             source: input.source ?? "manual",
@@ -264,7 +275,7 @@ const makeMemoryRepository = Effect.gen(function* () {
   const listByProjectRows = SqlSchema.findAll({
     Request: Schema.Struct({
       projectId: TrimmedNonEmptyString,
-      includeGlobal: Schema.Boolean,
+      includeThread: Schema.Boolean,
       includeArchived: Schema.Boolean,
       category: Schema.NullOr(MemoryCategory),
       limit: Schema.Number,
@@ -278,7 +289,7 @@ const makeMemoryRepository = Effect.gen(function* () {
           FROM projection_memories
           WHERE (
             project_id = ?
-            ${input.includeGlobal ? "OR scope = 'global'" : ""}
+            ${input.includeThread ? "OR scope = 'thread'" : ""}
           )
           ${input.includeArchived ? "" : "AND archived_at IS NULL"}
           ${input.category !== null ? "AND category = ?" : ""}
@@ -297,7 +308,7 @@ const makeMemoryRepository = Effect.gen(function* () {
   const countByProjectRows = SqlSchema.findAll({
     Request: Schema.Struct({
       projectId: TrimmedNonEmptyString,
-      includeGlobal: Schema.Boolean,
+      includeThread: Schema.Boolean,
       includeArchived: Schema.Boolean,
       category: Schema.NullOr(MemoryCategory),
     }),
@@ -309,7 +320,7 @@ const makeMemoryRepository = Effect.gen(function* () {
           FROM projection_memories
           WHERE (
             project_id = ?
-            ${input.includeGlobal ? "OR scope = 'global'" : ""}
+            ${input.includeThread ? "OR scope = 'thread'" : ""}
           )
           ${input.includeArchived ? "" : "AND archived_at IS NULL"}
           ${input.category !== null ? "AND category = ?" : ""}
@@ -322,14 +333,14 @@ const makeMemoryRepository = Effect.gen(function* () {
     Effect.gen(function* () {
       const limit = input.limit ?? 50;
       const offset = input.offset ?? 0;
-      const includeGlobal = input.includeGlobal ?? true;
+      const includeThread = input.includeThread ?? true;
       const includeArchived = input.includeArchived ?? false;
       const category = input.category ?? null;
 
       const [rows, countRows] = yield* Effect.all([
         listByProjectRows({
           projectId: input.projectId,
-          includeGlobal,
+          includeThread,
           includeArchived,
           category,
           limit,
@@ -337,7 +348,7 @@ const makeMemoryRepository = Effect.gen(function* () {
         }),
         countByProjectRows({
           projectId: input.projectId,
-          includeGlobal,
+          includeThread,
           includeArchived,
           category,
         }),
@@ -374,7 +385,7 @@ const makeMemoryRepository = Effect.gen(function* () {
           JOIN projection_memories_fts fts ON fts.memory_id = m.memory_id
           WHERE fts MATCH ?
           AND m.archived_at IS NULL
-          ${input.projectId !== null ? "AND (m.project_id = ? OR m.scope = 'global')" : ""}
+          ${input.projectId !== null ? "AND m.project_id = ?" : ""}
           ${input.category !== null ? "AND m.category = ?" : ""}
           ORDER BY bm25(fts) ASC
           LIMIT ?
@@ -408,6 +419,7 @@ const makeMemoryRepository = Effect.gen(function* () {
   const getRelevantForThreadRows = SqlSchema.findAll({
     Request: Schema.Struct({
       projectId: TrimmedNonEmptyString,
+      threadId: TrimmedNonEmptyString,
       limit: Schema.Number,
     }),
     Result: MemoryDbRowSchema,
@@ -416,7 +428,7 @@ const makeMemoryRepository = Effect.gen(function* () {
         `
           SELECT ${MEMORY_SELECT_COLUMNS}
           FROM projection_memories
-          WHERE (project_id = ? OR scope = 'global')
+          WHERE (project_id = ? OR (scope = 'thread' AND thread_id = ?))
           AND archived_at IS NULL
           ORDER BY
             relevance_score DESC,
@@ -427,7 +439,7 @@ const makeMemoryRepository = Effect.gen(function* () {
             updated_at DESC
           LIMIT ?
         `,
-        [input.projectId, input.limit],
+        [input.projectId, input.threadId, input.limit],
       ),
   });
 
@@ -444,6 +456,7 @@ const makeMemoryRepository = Effect.gen(function* () {
     // Otherwise, return top memories by relevance + recency
     return getRelevantForThreadRows({
       projectId: input.projectId,
+      threadId: input.threadId,
       limit: input.limit ?? 10,
     }).pipe(
       Effect.mapError(
@@ -466,6 +479,56 @@ const makeMemoryRepository = Effect.gen(function* () {
       `;
     }).pipe(Effect.mapError(toPersistenceSqlError("MemoryRepository.recordAccess:query")));
 
+  const findThreadSummaryRows = SqlSchema.findAll({
+    Request: Schema.Struct({ threadId: TrimmedNonEmptyString }),
+    Result: MemoryDbRowSchema,
+    execute: (input) =>
+      sql.unsafe(
+        `SELECT ${MEMORY_SELECT_COLUMNS} FROM projection_memories
+         WHERE thread_id = ? AND scope = 'thread' AND archived_at IS NULL
+         LIMIT 1`,
+        [input.threadId],
+      ),
+  });
+
+  const findThreadSummary: MemoryRepositoryShape["findThreadSummary"] = (threadId) =>
+    findThreadSummaryRows({ threadId: threadId as typeof TrimmedNonEmptyString.Type }).pipe(
+      Effect.map((rows) => (rows.length > 0 ? rowToMemory(rows[0]!) : null)),
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "MemoryRepository.findThreadSummary:query",
+          "MemoryRepository.findThreadSummary:decode",
+        ),
+      ),
+    );
+
+  const upsertThreadSummary: MemoryRepositoryShape["upsertThreadSummary"] = (input) =>
+    Effect.gen(function* () {
+      // Delete any existing thread summary for this thread
+      yield* sql`
+        DELETE FROM projection_memories
+        WHERE thread_id = ${input.threadId} AND scope = 'thread'
+      `;
+
+      // Insert the new thread summary
+      return yield* create({
+        threadId: input.threadId as ThreadId,
+        projectId: input.projectId as ProjectId,
+        scope: "thread",
+        category: "fact",
+        source: "auto",
+        title: input.title as typeof TrimmedNonEmptyString.Type,
+        content: input.content as typeof TrimmedNonEmptyString.Type,
+      });
+    }).pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "MemoryRepository.upsertThreadSummary:query",
+          "MemoryRepository.upsertThreadSummary:encodeRequest",
+        ),
+      ),
+    );
+
   return {
     create,
     update,
@@ -475,6 +538,8 @@ const makeMemoryRepository = Effect.gen(function* () {
     search,
     getRelevantForThread,
     recordAccess,
+    findThreadSummary,
+    upsertThreadSummary,
   } satisfies MemoryRepositoryShape;
 });
 

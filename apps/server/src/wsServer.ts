@@ -65,6 +65,7 @@ import { ReviewCommentRepository } from "./persistence/Services/ReviewCommentRep
 import { ReviewRequestRepository } from "./persistence/Services/ReviewRequestRepository.ts";
 import { MemoryRepository } from "./persistence/Services/MemoryRepository.ts";
 import { MemoryExtraction } from "./memory/Services/MemoryExtraction.ts";
+import { MemoryReactor } from "./memory/Services/MemoryReactor.ts";
 import { GitHubCli } from "./git/Services/GitHubCli.ts";
 import { tryHandleProjectFaviconRequest } from "./projectFaviconRoute";
 import {
@@ -288,7 +289,8 @@ export type ServerRuntimeServices =
   | ReviewCommentRepository
   | ReviewRequestRepository
   | MemoryRepository
-  | MemoryExtraction;
+  | MemoryExtraction
+  | MemoryReactor;
 
 export class ServerLifecycleError extends Schema.TaggedErrorClass<ServerLifecycleError>()(
   "ServerLifecycleError",
@@ -709,6 +711,11 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   ).pipe(Effect.forkIn(subscriptionsScope));
 
   yield* Scope.provide(orchestrationReactor.start, subscriptionsScope);
+
+  // Start the memory reactor (thread summaries + periodic extraction)
+  const memoryReactorService = yield* MemoryReactor;
+  yield* Scope.provide(memoryReactorService.start, subscriptionsScope);
+
   yield* readiness.markOrchestrationSubscriptionsReady;
 
   let welcomeBootstrapProjectId: ProjectId | undefined;

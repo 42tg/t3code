@@ -7,7 +7,6 @@ import {
   PlusIcon,
   SearchIcon,
   Trash2Icon,
-  GlobeIcon,
   FolderIcon,
   SparklesIcon,
   UserIcon,
@@ -269,8 +268,8 @@ const MemoryItem = memo(function MemoryItem({ memory, onArchive, onDelete }: Mem
             <TooltipTrigger
               render={
                 <Badge variant="outline" size="sm" className="gap-0.5">
-                  {memory.scope === "global" ? (
-                    <GlobeIcon className="size-2.5" />
+                  {memory.scope === "thread" ? (
+                    <BrainIcon className="size-2.5" />
                   ) : memory.scope === "daily" ? (
                     <CalendarIcon className="size-2.5" />
                   ) : (
@@ -281,8 +280,8 @@ const MemoryItem = memo(function MemoryItem({ memory, onArchive, onDelete }: Mem
               }
             />
             <TooltipPopup side="bottom">
-              {memory.scope === "global"
-                ? "Available in all projects"
+              {memory.scope === "thread"
+                ? "Thread summary"
                 : memory.scope === "daily"
                   ? `Daily memory for ${memory.date ?? "today"}`
                   : "Project-specific memory"}

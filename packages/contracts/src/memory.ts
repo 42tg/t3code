@@ -7,7 +7,7 @@ export type MemoryDate = typeof MemoryDate.Type;
 
 // ── Domain Enums ────────────────────────────────────────────────────
 
-export const MemoryScope = Schema.Literals(["project", "global", "daily"]);
+export const MemoryScope = Schema.Literals(["project", "thread", "daily"]);
 export type MemoryScope = typeof MemoryScope.Type;
 
 export const MemoryCategory = Schema.Literals([
@@ -30,6 +30,8 @@ export type MemoryId = typeof MemoryId.Type;
 export const Memory = Schema.Struct({
   memoryId: MemoryId,
   projectId: Schema.optional(ProjectId),
+  /** The thread this memory summarizes — required when scope is "thread". */
+  threadId: Schema.optional(ThreadId),
   scope: MemoryScope,
   category: MemoryCategory,
   source: MemorySource,
@@ -52,6 +54,8 @@ export type Memory = typeof Memory.Type;
 
 export const MemoryCreateInput = Schema.Struct({
   projectId: Schema.optional(ProjectId),
+  /** The thread this memory summarizes — required when scope is "thread". */
+  threadId: Schema.optional(ThreadId),
   scope: MemoryScope,
   category: MemoryCategory,
   /** Defaults to "manual" when omitted. */
@@ -86,7 +90,8 @@ export type MemoryDeleteInput = typeof MemoryDeleteInput.Type;
 
 export const MemoryListInput = Schema.Struct({
   projectId: ProjectId,
-  includeGlobal: Schema.optional(Schema.Boolean),
+  /** Include thread-scope memories in results. Defaults to true. */
+  includeThread: Schema.optional(Schema.Boolean),
   includeArchived: Schema.optional(Schema.Boolean),
   category: Schema.optional(MemoryCategory),
   limit: Schema.optional(NonNegativeInt),

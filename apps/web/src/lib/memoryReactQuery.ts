@@ -37,7 +37,7 @@ export function memoryListQueryOptions(
       if (!projectId) throw new Error("Project ID is required.");
       return api.memory.list({
         projectId,
-        includeGlobal: true,
+        includeThread: true,
         includeArchived: opts?.includeArchived,
         category: opts?.category,
       });

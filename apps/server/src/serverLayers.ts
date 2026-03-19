@@ -41,6 +41,7 @@ import { ReviewCommentRepository } from "./persistence/Services/ReviewCommentRep
 import { ReviewRequestRepositoryLive } from "./persistence/Layers/ReviewRequestRepository";
 import { MemoryRepositoryLive } from "./persistence/Layers/MemoryRepository";
 import { MemoryExtractionLive } from "./memory/Layers/MemoryExtraction";
+import { MemoryReactorLive } from "./memory/Layers/MemoryReactor";
 import { BunPtyAdapterLive } from "./terminal/Layers/BunPTY";
 import { NodePtyAdapterLive } from "./terminal/Layers/NodePTY";
 import { AnalyticsService } from "./telemetry/Services/AnalyticsService";
@@ -149,6 +150,11 @@ export function makeServerRuntimeServicesLayer() {
     Layer.provideMerge(orchestrationReactorLayer),
   );
 
+  const memoryReactorLayer = MemoryReactorLive.pipe(
+    Layer.provideMerge(memoryExtractionLayer),
+    Layer.provideMerge(orchestrationReactorLayer),
+  );
+
   return Layer.mergeAll(
     orchestrationReactorLayer,
     gitCoreLayer,
@@ -160,5 +166,6 @@ export function makeServerRuntimeServicesLayer() {
     ReviewRequestRepositoryLive,
     MemoryRepositoryLive,
     memoryExtractionLayer,
+    memoryReactorLayer,
   ).pipe(Layer.provideMerge(NodeServices.layer));
 }
