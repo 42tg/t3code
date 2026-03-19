@@ -95,6 +95,14 @@ export interface MemoryRepositoryShape {
   readonly recordAccess: (memoryId: string) => Effect.Effect<void, MemoryRepositoryError>;
 
   /**
+   * Delete all daily-scope memories for a given date.
+   * Used to replace daily summaries idempotently on re-extraction.
+   */
+  readonly deleteDailyByDate: (input: {
+    date: string;
+  }) => Effect.Effect<void, MemoryRepositoryError>;
+
+  /**
    * Find the thread-scope summary memory for a given thread, if it exists.
    */
   readonly findThreadSummary: (

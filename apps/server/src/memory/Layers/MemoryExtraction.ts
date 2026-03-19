@@ -312,6 +312,12 @@ const makeMemoryExtraction = Effect.gen(function* () {
           ),
         );
 
+        // Delete existing daily memories for today before inserting fresh ones
+        // This makes daily summaries idempotent — re-running replaces, not duplicates
+        yield* memoryRepo
+          .deleteDailyByDate({ date: today })
+          .pipe(Effect.catchCause(() => Effect.void));
+
         for (const entry of dailyResult.entries) {
           if (!entry.title.trim() || !entry.content.trim()) continue;
 

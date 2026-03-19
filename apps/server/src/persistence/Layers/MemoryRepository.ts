@@ -479,6 +479,12 @@ const makeMemoryRepository = Effect.gen(function* () {
       `;
     }).pipe(Effect.mapError(toPersistenceSqlError("MemoryRepository.recordAccess:query")));
 
+  const deleteDailyByDate: MemoryRepositoryShape["deleteDailyByDate"] = (input) =>
+    sql`
+      DELETE FROM projection_memories
+      WHERE scope = 'daily' AND date = ${input.date}
+    `.pipe(Effect.mapError(toPersistenceSqlError("MemoryRepository.deleteDailyByDate:query")));
+
   const findThreadSummaryRows = SqlSchema.findAll({
     Request: Schema.Struct({ threadId: TrimmedNonEmptyString }),
     Result: MemoryDbRowSchema,
@@ -538,6 +544,7 @@ const makeMemoryRepository = Effect.gen(function* () {
     search,
     getRelevantForThread,
     recordAccess,
+    deleteDailyByDate,
     findThreadSummary,
     upsertThreadSummary,
   } satisfies MemoryRepositoryShape;

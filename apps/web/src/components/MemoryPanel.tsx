@@ -4,7 +4,6 @@ import {
   ArchiveIcon,
   BrainIcon,
   CalendarIcon,
-  PlusIcon,
   SearchIcon,
   Trash2Icon,
   FolderIcon,
@@ -23,8 +22,6 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
-import { MemoryCreateDialog } from "./MemoryCreateDialog";
-import { MemoryExtractDialog } from "./MemoryExtractDialog";
 
 const CATEGORY_LABELS: Record<MemoryCategory, string> = {
   preference: "Preference",
@@ -59,8 +56,6 @@ export const MemoryPanel = memo(function MemoryPanel({ projectId }: MemoryPanelP
   const [searchQuery, setSearchQuery] = useState("");
   const deferredSearch = useDeferredValue(searchQuery);
   const [selectedCategory, setSelectedCategory] = useState<MemoryCategory | undefined>(undefined);
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [extractDialogOpen, setExtractDialogOpen] = useState(false);
 
   const isSearching = deferredSearch.length > 0;
 
@@ -119,16 +114,7 @@ export const MemoryPanel = memo(function MemoryPanel({ projectId }: MemoryPanelP
             </Badge>
           )}
         </div>
-        <div className="flex items-center gap-1">
-          <Button size="xs" variant="outline" onClick={() => setExtractDialogOpen(true)}>
-            <SparklesIcon className="size-3" />
-            Extract
-          </Button>
-          <Button size="xs" variant="outline" onClick={() => setCreateDialogOpen(true)}>
-            <PlusIcon className="size-3" />
-            Add
-          </Button>
-        </div>
+        {/* Memories are auto-extracted — no manual buttons needed */}
       </div>
 
       {/* Search */}
@@ -201,20 +187,6 @@ export const MemoryPanel = memo(function MemoryPanel({ projectId }: MemoryPanelP
           ))}
         </div>
       </ScrollArea>
-
-      {/* Create dialog */}
-      <MemoryCreateDialog
-        projectId={projectId}
-        open={createDialogOpen}
-        onOpenChange={setCreateDialogOpen}
-      />
-
-      {/* Extract dialog */}
-      <MemoryExtractDialog
-        projectId={projectId}
-        open={extractDialogOpen}
-        onOpenChange={setExtractDialogOpen}
-      />
     </div>
   );
 });

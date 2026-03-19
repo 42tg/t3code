@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { BrainIcon } from "lucide-react";
 import { memo } from "react";
 import { memoryForThreadQueryOptions } from "../lib/memoryReactQuery";
-import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 
 interface MemoryBadgeProps {
@@ -27,15 +27,10 @@ export const MemoryBadge = memo(function MemoryBadge({
     <Tooltip>
       <TooltipTrigger
         render={
-          <Badge
-            render={<button type="button" onClick={onClick} />}
-            variant="outline"
-            size="sm"
-            className="gap-1"
-          >
-            <BrainIcon className="size-2.5" />
+          <Button variant="outline" size="xs" onClick={onClick}>
+            <BrainIcon className="size-3" />
             {count}
-          </Badge>
+          </Button>
         }
       />
       <TooltipPopup side="bottom">
