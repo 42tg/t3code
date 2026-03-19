@@ -195,6 +195,7 @@ export function buildProjectExtractionPrompt(
 export function buildDailySummaryPrompt(
   projectSummaries: readonly { projectTitle: string; threadTitles: string[] }[],
   date: string,
+  existingDailySummaries?: readonly { title: string; content: string }[],
 ): string {
   const parts: string[] = [`Date: ${date}\n\nProjects with activity today:\n`];
 
@@ -204,8 +205,17 @@ export function buildDailySummaryPrompt(
     parts.push(`--- End Project ---\n`);
   }
 
+  if (existingDailySummaries && existingDailySummaries.length > 0) {
+    parts.push(`\n--- Earlier summaries from today (incorporate and build on these) ---`);
+    for (const existing of existingDailySummaries) {
+      parts.push(`\nTitle: ${existing.title}`);
+      parts.push(`Content: ${existing.content}`);
+    }
+    parts.push(`--- End earlier summaries ---\n`);
+  }
+
   parts.push(
-    `\nProduce a daily summary entry for each project listed above, plus one overall daily entry summarizing all projects.`,
+    `\nProduce a COMPLETE daily summary entry for each project listed above, plus one overall daily entry summarizing all projects. Incorporate any earlier summaries from today — combine them with the new activity into a single comprehensive summary per project.`,
   );
 
   return parts.join("\n");

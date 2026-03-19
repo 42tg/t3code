@@ -298,9 +298,19 @@ const makeMemoryExtraction = Effect.gen(function* () {
       if (projectSummaries.length > 0) {
         const today = new Date().toISOString().slice(0, 10);
 
+        // Load existing daily summaries to incorporate into the new ones
+        const existingDaily = yield* memoryRepo
+          .listDailyByDate({ date: today })
+          .pipe(Effect.catchCause(() => Effect.succeed([] as readonly Memory[])));
+
+        const existingDailySummaries = existingDaily.map((m) => ({
+          title: m.title,
+          content: m.content,
+        }));
+
         const dailyResult = yield* runAgentQuery(
           "memoryExtraction.daily",
-          buildDailySummaryPrompt(projectSummaries, today),
+          buildDailySummaryPrompt(projectSummaries, today, existingDailySummaries),
           DAILY_SUMMARY_SCHEMA as Record<string, unknown>,
           parseDailySummary,
           DAILY_SUMMARY_SYSTEM_PROMPT,

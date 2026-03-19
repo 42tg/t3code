@@ -479,6 +479,29 @@ const makeMemoryRepository = Effect.gen(function* () {
       `;
     }).pipe(Effect.mapError(toPersistenceSqlError("MemoryRepository.recordAccess:query")));
 
+  const listDailyByDateRows = SqlSchema.findAll({
+    Request: Schema.Struct({ date: Schema.String }),
+    Result: MemoryDbRowSchema,
+    execute: (input) =>
+      sql.unsafe(
+        `SELECT ${MEMORY_SELECT_COLUMNS} FROM projection_memories
+         WHERE scope = 'daily' AND date = ? AND archived_at IS NULL
+         ORDER BY created_at DESC`,
+        [input.date],
+      ),
+  });
+
+  const listDailyByDate: MemoryRepositoryShape["listDailyByDate"] = (input) =>
+    listDailyByDateRows(input).pipe(
+      Effect.map((rows) => rows.map(rowToMemory)),
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "MemoryRepository.listDailyByDate:query",
+          "MemoryRepository.listDailyByDate:decode",
+        ),
+      ),
+    );
+
   const deleteDailyByDate: MemoryRepositoryShape["deleteDailyByDate"] = (input) =>
     sql`
       DELETE FROM projection_memories
@@ -544,6 +567,7 @@ const makeMemoryRepository = Effect.gen(function* () {
     search,
     getRelevantForThread,
     recordAccess,
+    listDailyByDate,
     deleteDailyByDate,
     findThreadSummary,
     upsertThreadSummary,
