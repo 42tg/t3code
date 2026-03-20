@@ -979,8 +979,11 @@ function makeClaudeCodeAdapter(options: ClaudeCodeAdapterLiveOptions) {
             const rawJson = tool.inputJsonChunks.join("");
             // eslint-disable-next-line -- Effect.sync callback, not in generator scope
             parsedToolInput = yield* Effect.sync((): Record<string, unknown> | undefined => {
-              try { return JSON.parse(rawJson) as Record<string, unknown>; }
-              catch { return undefined; }
+              try {
+                return JSON.parse(rawJson) as Record<string, unknown>;
+              } catch {
+                return undefined;
+              }
             });
             if (parsedToolInput) {
               tool.detail = summarizeToolRequest(tool.toolName, parsedToolInput);
