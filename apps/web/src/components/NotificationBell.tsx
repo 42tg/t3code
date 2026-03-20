@@ -331,11 +331,11 @@ export default function NotificationBell({
                       </div>
                       <button
                         type="button"
-                        className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground/40 opacity-0 transition-opacity hover:bg-secondary hover:text-foreground group-hover/item:opacity-100"
+                        className="shrink-0 self-start rounded p-1.5 text-muted-foreground/40 opacity-0 transition-opacity hover:bg-secondary hover:text-foreground group-hover/item:opacity-100"
                         aria-label="Dismiss"
                         onClick={(event) => void handleDismiss(event, request.id)}
                       >
-                        <XIcon className="size-3" />
+                        <XIcon className="size-3.5" />
                       </button>
                     </div>
                   </div>
