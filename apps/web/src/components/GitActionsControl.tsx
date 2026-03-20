@@ -1,7 +1,13 @@
 import type { GitStackedAction, GitStatusResult, ThreadId } from "@t3tools/contracts";
 import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDownIcon, CloudUploadIcon, GitCommitIcon, InfoIcon } from "lucide-react";
+import {
+  ArrowDownToLineIcon,
+  ChevronDownIcon,
+  CloudUploadIcon,
+  GitCommitIcon,
+  InfoIcon,
+} from "lucide-react";
 import { GitHubIcon } from "./Icons";
 import {
   buildGitActionProgressStages,
@@ -138,6 +144,7 @@ const COMMIT_DIALOG_DESCRIPTION =
 
 function GitActionItemIcon({ icon }: { icon: GitActionIconName }) {
   if (icon === "commit") return <GitCommitIcon />;
+  if (icon === "pull") return <ArrowDownToLineIcon />;
   if (icon === "push") return <CloudUploadIcon />;
   return <GitHubIcon />;
 }
@@ -145,7 +152,7 @@ function GitActionItemIcon({ icon }: { icon: GitActionIconName }) {
 function GitQuickActionIcon({ quickAction }: { quickAction: GitQuickAction }) {
   const iconClassName = "size-3.5";
   if (quickAction.kind === "open_pr") return <GitHubIcon className={iconClassName} />;
-  if (quickAction.kind === "run_pull") return <InfoIcon className={iconClassName} />;
+  if (quickAction.kind === "run_pull") return <ArrowDownToLineIcon className={iconClassName} />;
   if (quickAction.kind === "run_action") {
     if (quickAction.action === "commit") return <GitCommitIcon className={iconClassName} />;
     if (quickAction.action === "commit_push") return <CloudUploadIcon className={iconClassName} />;
@@ -613,6 +620,10 @@ export default function GitActionsControl({ gitCwd, activeThreadId }: GitActions
         void openExistingPr();
         return;
       }
+      if (item.kind === "run_pull") {
+        pullMutation.mutate();
+        return;
+      }
       if (item.dialogAction === "push") {
         void runGitActionWithToast({ action: "commit_push", forcePushOnlyProgress: true });
         return;
@@ -625,7 +636,7 @@ export default function GitActionsControl({ gitCwd, activeThreadId }: GitActions
       setIsEditingFiles(false);
       setIsCommitDialogOpen(true);
     },
-    [openExistingPr, runGitActionWithToast, setIsCommitDialogOpen],
+    [openExistingPr, pullMutation, runGitActionWithToast, setIsCommitDialogOpen],
   );
 
   const runDialogAction = useCallback(() => {

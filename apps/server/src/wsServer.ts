@@ -931,7 +931,28 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
 
       case WS_METHODS.gitPull: {
         const body = stripRequestTag(request.body);
-        return yield* git.pullCurrentBranch(body.cwd);
+        // Try fast-forward first; if it fails (e.g. force-push divergence)
+        // and the working tree is clean, reset to upstream instead.
+        return yield* git.pullCurrentBranch(body.cwd).pipe(
+          Effect.catch(() =>
+            Effect.gen(function* () {
+              const details = yield* git.statusDetails(body.cwd);
+              if (details.hasWorkingTreeChanges) {
+                return yield* new RouteRequestError({
+                  message:
+                    "Branch has diverged and has local changes. Stash or commit changes before syncing.",
+                });
+              }
+              yield* git.resetToUpstream(body.cwd);
+              const refreshed = yield* git.statusDetails(body.cwd);
+              return {
+                status: "pulled" as const,
+                branch: refreshed.branch ?? "unknown",
+                upstreamBranch: refreshed.upstreamRef,
+              };
+            }),
+          ),
+        );
       }
 
       case WS_METHODS.gitRunStackedAction: {
