@@ -20,7 +20,7 @@ import { parsePatchFiles } from "@pierre/diffs";
 import { FileDiff, type FileDiffMetadata } from "@pierre/diffs/react";
 import { useQuery } from "@tanstack/react-query";
 import { LoaderIcon } from "lucide-react";
-import { useMemo } from "react";
+import React, { type ReactNode, useMemo } from "react";
 import {
   type DiffAnnotation,
   normalizeFilePath,
@@ -34,6 +34,38 @@ import { DiffFileHeader } from "./DiffFileHeader";
 
 type DiffRenderMode = "stacked" | "split";
 type DiffThemeType = "light" | "dark";
+
+// ── Error boundary for @pierre/diffs render crashes ─────────────────
+
+/**
+ * Catches runtime errors from the `@pierre/diffs` renderer (e.g. invalid
+ * hunk data, null line references) and shows a fallback instead of
+ * crashing the entire diff view.
+ */
+export class DiffRenderErrorBoundary extends React.Component<
+  { filePath?: string; children: ReactNode },
+  { error: Error | null }
+> {
+  constructor(props: { filePath?: string; children: ReactNode }) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  override render() {
+    if (this.state.error) {
+      return (
+        <div className="px-3 py-2">
+          <p className="text-[11px] font-medium text-destructive/70">{this.state.error.message}</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ── Shared hook: fetch file + build synthetic patch ─────────────────
 

@@ -25,7 +25,11 @@ import {
 } from "../lib/diffAnnotations";
 import { DIFF_UNSAFE_CSS, resolveDiffThemeName } from "../lib/diffRendering";
 import { renderDiffAnnotation } from "./DiffAnnotationCards";
-import { AnnotationOnlyFile, UnmatchedAnnotations } from "./AnnotatedFileDiff";
+import {
+  AnnotationOnlyFile,
+  DiffRenderErrorBoundary,
+  UnmatchedAnnotations,
+} from "./AnnotatedFileDiff";
 import { DiffFileHeader } from "./DiffFileHeader";
 
 // ── Shared types ─────────────────────────────────────────────────────
@@ -178,22 +182,24 @@ export function DiffFileList({
                     onOpenFile(filePath);
                   }}
                 >
-                  <FileDiff
-                    fileDiff={fileDiff}
-                    options={{
-                      diffStyle: diffRenderMode === "split" ? "split" : "unified",
-                      lineDiffType: "none",
-                      theme: resolveDiffThemeName(resolvedTheme),
-                      themeType: resolvedTheme as DiffThemeType,
-                      unsafeCSS: DIFF_UNSAFE_CSS,
-                    }}
-                    {...(fileAnnotations
-                      ? {
-                          lineAnnotations: toDiffLineAnnotations(fileAnnotations),
-                          renderAnnotation: renderDiffAnnotation,
-                        }
-                      : {})}
-                  />
+                  <DiffRenderErrorBoundary filePath={filePath}>
+                    <FileDiff
+                      fileDiff={fileDiff}
+                      options={{
+                        diffStyle: diffRenderMode === "split" ? "split" : "unified",
+                        lineDiffType: "none",
+                        theme: resolveDiffThemeName(resolvedTheme),
+                        themeType: resolvedTheme as DiffThemeType,
+                        unsafeCSS: DIFF_UNSAFE_CSS,
+                      }}
+                      {...(fileAnnotations
+                        ? {
+                            lineAnnotations: toDiffLineAnnotations(fileAnnotations),
+                            renderAnnotation: renderDiffAnnotation,
+                          }
+                        : {})}
+                    />
+                  </DiffRenderErrorBoundary>
                   <UnmatchedAnnotations
                     fileDiff={fileDiff}
                     annotations={fileAnnotations}
