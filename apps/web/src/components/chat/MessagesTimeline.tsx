@@ -16,18 +16,22 @@ import { type TurnDiffSummary } from "../../types";
 import { summarizeTurnDiffStats } from "../../lib/turnDiffTree";
 import ChatMarkdown from "../ChatMarkdown";
 import {
+  BookOpenIcon,
   BotIcon,
   CheckIcon,
   CircleAlertIcon,
   EyeIcon,
+  FileTextIcon,
+  FolderSearchIcon,
   GlobeIcon,
   HammerIcon,
   Loader2Icon,
   type LucideIcon,
+  PlugIcon,
+  SearchIcon,
   SquarePenIcon,
   TerminalIcon,
   Undo2Icon,
-  WrenchIcon,
   ZapIcon,
 } from "lucide-react";
 import { Button } from "../ui/button";
@@ -814,22 +818,46 @@ function workEntryPreview(
 }
 
 function workEntryIcon(workEntry: TimelineWorkEntry): LucideIcon {
+  // Match by tool name first for precise icons
+  switch (workEntry.toolName) {
+    case "Bash":
+      return TerminalIcon;
+    case "Edit":
+    case "Write":
+    case "MultiEdit":
+      return SquarePenIcon;
+    case "Read":
+      return FileTextIcon;
+    case "WebSearch":
+    case "WebFetch":
+      return GlobeIcon;
+    case "Grep":
+      return SearchIcon;
+    case "Glob":
+      return FolderSearchIcon;
+    case "Agent":
+      return BotIcon;
+    case "NotebookEdit":
+      return BookOpenIcon;
+    case "Skill":
+      return ZapIcon;
+  }
+
+  // Fall back to request kind (approval flow)
   if (workEntry.requestKind === "command") return TerminalIcon;
   if (workEntry.requestKind === "file-read") return EyeIcon;
   if (workEntry.requestKind === "file-change") return SquarePenIcon;
 
-  if (workEntry.itemType === "command_execution" || workEntry.command) {
-    return TerminalIcon;
-  }
-  if (workEntry.itemType === "file_change" || (workEntry.changedFiles?.length ?? 0) > 0) {
+  // Fall back to item type
+  if (workEntry.itemType === "command_execution" || workEntry.command) return TerminalIcon;
+  if (workEntry.itemType === "file_change" || (workEntry.changedFiles?.length ?? 0) > 0)
     return SquarePenIcon;
-  }
   if (workEntry.itemType === "web_search") return GlobeIcon;
   if (workEntry.itemType === "image_view") return EyeIcon;
 
   switch (workEntry.itemType) {
     case "mcp_tool_call":
-      return WrenchIcon;
+      return PlugIcon;
     case "dynamic_tool_call":
     case "collab_agent_tool_call":
       return HammerIcon;
