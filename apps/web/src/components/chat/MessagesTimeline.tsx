@@ -28,7 +28,9 @@ import {
   GlobeIcon,
   HammerIcon,
   Loader2Icon,
+  ListIcon,
   type LucideIcon,
+  MessageSquareTextIcon,
   PlugIcon,
   SearchIcon,
   SquarePenIcon,
@@ -839,7 +841,53 @@ function workEntryPreview(
     : `${shortenToolSummary(firstPath)} +${workEntry.changedFiles!.length - 1} more`;
 }
 
+/** Check if a tool name refers to a review comment MCP tool. */
+function isReviewCommentTool(toolName?: string): boolean {
+  if (!toolName) return false;
+  const lower = toolName.toLowerCase();
+  return lower.includes("review_comment") || lower.includes("review-comment");
+}
+
+/** Extract review comment severity from the detail/command JSON preview. */
+function extractReviewSeverity(
+  workEntry: Pick<TimelineWorkEntry, "detail" | "command">,
+): "info" | "suggestion" | "issue" | "blocker" | null {
+  const text = workEntry.detail || workEntry.command || "";
+  const match = text.match(/"severity"\s*:\s*"(info|suggestion|issue|blocker)"/);
+  return (match?.[1] as "info" | "suggestion" | "issue" | "blocker") ?? null;
+}
+
+/** Severity-based color class for review comment icons. */
+function reviewSeverityClass(severity: "info" | "suggestion" | "issue" | "blocker" | null): string {
+  switch (severity) {
+    case "blocker":
+      return "text-rose-400";
+    case "issue":
+      return "text-orange-400";
+    case "suggestion":
+      return "text-blue-400";
+    case "info":
+      return "text-muted-foreground/60";
+    default:
+      return "text-muted-foreground/50";
+  }
+}
+
+function reviewCommentIcon(
+  toolName?: string,
+): { icon: LucideIcon; isReview: true } | { isReview: false } {
+  if (!isReviewCommentTool(toolName)) return { isReview: false };
+  const lower = toolName!.toLowerCase();
+  if (lower.includes("list")) return { icon: ListIcon, isReview: true };
+  if (lower.includes("update")) return { icon: MessageSquareTextIcon, isReview: true };
+  return { icon: MessageSquareTextIcon, isReview: true };
+}
+
 function workEntryIcon(workEntry: TimelineWorkEntry): LucideIcon {
+  // Review comment MCP tools get a dedicated icon
+  const review = reviewCommentIcon(workEntry.toolName);
+  if (review.isReview) return review.icon;
+
   // Match by tool name first for precise icons
   switch (workEntry.toolName) {
     case "Bash":
@@ -1000,12 +1048,15 @@ const SimpleWorkEntryRow = memo(function SimpleWorkEntryRow(props: {
   const hasChangedFiles = (workEntry.changedFiles?.length ?? 0) > 0;
   const previewIsChangedFiles = hasChangedFiles && !workEntry.command && !workEntry.detail;
 
+  // Review comment tools get severity-based icon coloring
+  const isReview = isReviewCommentTool(workEntry.toolName);
+  const severity = isReview ? extractReviewSeverity(workEntry) : null;
+  const iconClassName = isReview ? reviewSeverityClass(severity) : iconConfig.className;
+
   return (
     <div className="rounded-lg px-1 py-1">
       <div className="flex items-center gap-2 transition-[opacity,translate] duration-200">
-        <span
-          className={cn("flex size-5 shrink-0 items-center justify-center", iconConfig.className)}
-        >
+        <span className={cn("flex size-5 shrink-0 items-center justify-center", iconClassName)}>
           <EntryIcon className="size-3" />
         </span>
         <div className="min-w-0 flex-1 overflow-hidden">
