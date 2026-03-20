@@ -18,7 +18,9 @@ import ChatMarkdown from "../ChatMarkdown";
 import {
   BookOpenIcon,
   BotIcon,
+  BrainIcon,
   CheckIcon,
+  ChevronRightIcon,
   CircleAlertIcon,
   EyeIcon,
   FileTextIcon,
@@ -540,6 +542,26 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                 </div>
               )}
               <div className="min-w-0 px-1 py-0.5">
+                {row.message.thinkingText && (
+                  <details className="group/thinking mb-3 rounded-lg border border-border/50 bg-muted/20">
+                    <summary className="flex cursor-pointer select-none items-center gap-2 px-3 py-2 text-xs text-muted-foreground/70 transition-colors hover:text-muted-foreground/90">
+                      <BrainIcon
+                        className={`size-3.5 shrink-0 ${row.message.streaming && !row.message.text ? "animate-pulse text-purple-400" : ""}`}
+                      />
+                      <span className="font-medium">
+                        {row.message.streaming && !row.message.text ? "Thinking…" : "Thinking"}
+                      </span>
+                      <ChevronRightIcon className="ml-auto size-3.5 transition-transform group-open/thinking:rotate-90" />
+                    </summary>
+                    <div className="border-t border-border/40 px-3 py-2 text-muted-foreground/80">
+                      <ChatMarkdown
+                        text={row.message.thinkingText}
+                        cwd={markdownCwd}
+                        isStreaming={Boolean(row.message.streaming && !row.message.text)}
+                      />
+                    </div>
+                  </details>
+                )}
                 <ChatMarkdown
                   text={messageText}
                   cwd={markdownCwd}
