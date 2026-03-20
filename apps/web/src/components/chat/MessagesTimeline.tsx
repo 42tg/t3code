@@ -18,7 +18,6 @@ import ChatMarkdown from "../ChatMarkdown";
 import {
   BotIcon,
   CheckIcon,
-  ChevronRightIcon,
   CircleAlertIcon,
   EyeIcon,
   GlobeIcon,
@@ -791,17 +790,27 @@ function workToneClass(tone: "thinking" | "tool" | "info" | "error"): string {
   return "text-muted-foreground/40";
 }
 
+/** Shorten an absolute path or long value to a readable inline summary. */
+function shortenToolSummary(value: string, maxLen = 80): string {
+  let result = value;
+  if (result.startsWith("/")) {
+    const parts = result.split("/").filter(Boolean);
+    result = parts.length > 3 ? `…/${parts.slice(-3).join("/")}` : result;
+  }
+  return result.length > maxLen ? `${result.slice(0, maxLen - 1)}…` : result;
+}
+
 function workEntryPreview(
   workEntry: Pick<TimelineWorkEntry, "detail" | "command" | "changedFiles">,
 ) {
-  if (workEntry.command) return workEntry.command;
-  if (workEntry.detail) return workEntry.detail;
+  if (workEntry.command) return shortenToolSummary(workEntry.command);
+  if (workEntry.detail) return shortenToolSummary(workEntry.detail);
   if ((workEntry.changedFiles?.length ?? 0) === 0) return null;
   const [firstPath] = workEntry.changedFiles ?? [];
   if (!firstPath) return null;
   return workEntry.changedFiles!.length === 1
-    ? firstPath
-    : `${firstPath} +${workEntry.changedFiles!.length - 1} more`;
+    ? shortenToolSummary(firstPath)
+    : `${shortenToolSummary(firstPath)} +${workEntry.changedFiles!.length - 1} more`;
 }
 
 function workEntryIcon(workEntry: TimelineWorkEntry): LucideIcon {
@@ -884,18 +893,12 @@ const AgentExecutionContainer = memo(function AgentExecutionContainer({
     >
       <button
         type="button"
-        className="flex w-full items-start gap-2 px-3 py-2 text-left transition-colors duration-100 hover:bg-muted/20"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors duration-100 hover:bg-muted/20"
         onClick={() => setExpanded(!expanded)}
       >
-        <ChevronRightIcon
-          className={cn(
-            "mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/40 transition-transform duration-150",
-            expanded && "rotate-90",
-          )}
-        />
         <BotIcon
           className={cn(
-            "mt-0.5 h-4 w-4 shrink-0",
+            "h-4 w-4 shrink-0",
             isLive ? "text-blue-400" : isFailed ? "text-rose-400" : "text-muted-foreground/50",
           )}
         />
