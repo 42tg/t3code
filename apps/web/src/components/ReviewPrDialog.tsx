@@ -18,13 +18,13 @@ import {
 import { Button } from "./ui/button";
 import { toastManager } from "./ui/toast";
 import {
-  gitCreateWorktreeMutationOptions,
   gitFetchPrDetailsMutationOptions,
   gitListOpenPrsQueryOptions,
   invalidateGitQueries,
 } from "../lib/gitReactQuery";
 import { buildReviewPrompt } from "../lib/prReviewUtils";
 import { newThreadId } from "../lib/utils";
+import { ensureNativeApi } from "../nativeApi";
 import { useComposerDraftStore } from "../composerDraftStore";
 
 interface ReviewPrDialogProps {
@@ -49,7 +49,6 @@ export default function ReviewPrDialog({
   const setProjectDraftThreadId = useComposerDraftStore((store) => store.setProjectDraftThreadId);
 
   const fetchPrMutation = useMutation(gitFetchPrDetailsMutationOptions());
-  const createWorktreeMutation = useMutation(gitCreateWorktreeMutationOptions({ queryClient }));
   const openPrsQuery = useQuery(gitListOpenPrsQueryOptions(projectCwd, repo));
 
   const handleStartReview = useCallback(async () => {
@@ -57,11 +56,30 @@ export default function ReviewPrDialog({
 
     setIsCreating(true);
     try {
-      // Fetch the PR branch into local refs
-      const worktreeResult = await createWorktreeMutation.mutateAsync({
+      const api = ensureNativeApi();
+
+      // Materialize the PR head branch (fetches from remote, handles forks)
+      const prepareResult = await api.git.preparePullRequestThread({
         cwd: projectCwd,
-        branch: `origin/${prDetails.headRefName}`,
-        newBranch: `review/pr-${prDetails.number}-${Date.now().toString(36)}`,
+        reference: prDetails.url,
+        mode: "worktree",
+      });
+
+      // Create a unique worktree for this review session from the materialized branch
+      const reviewBranch = `review/pr-${prDetails.number}-${Date.now().toString(36)}`;
+      const worktreeResult = await api.git.createWorktree({
+        cwd: projectCwd,
+        branch: prepareResult.branch,
+        newBranch: reviewBranch,
+        path: null,
+      });
+
+      // Link the review branch to the PR's remote so `git push` works
+      await api.git.setBranchUpstream({
+        cwd: worktreeResult.worktree.path,
+        branch: reviewBranch,
+        remoteName: "origin",
+        remoteBranch: prDetails.headRefName,
       });
 
       const threadId = newThreadId();
@@ -99,16 +117,7 @@ export default function ReviewPrDialog({
     } finally {
       setIsCreating(false);
     }
-  }, [
-    createWorktreeMutation,
-    navigate,
-    onClose,
-    prDetails,
-    projectCwd,
-    projectId,
-    queryClient,
-    setProjectDraftThreadId,
-  ]);
+  }, [navigate, onClose, prDetails, projectCwd, projectId, queryClient, setProjectDraftThreadId]);
 
   const isBusy = fetchPrMutation.isPending || isCreating;
 

@@ -971,6 +971,18 @@ export const makeGitManager = Effect.gen(function* () {
             details.branch ?? pullRequest.headBranch,
           );
 
+          // Sync the worktree with upstream if it's behind (e.g. after force-push).
+          // Only update if the working tree is clean to avoid destroying local changes.
+          if (!details.hasWorkingTreeChanges && details.hasUpstream) {
+            if (details.behindCount > 0 && details.aheadCount === 0) {
+              // Simple fast-forward
+              yield* gitCore.pullCurrentBranch(worktreePath).pipe(Effect.catch(() => Effect.void));
+            } else if (details.behindCount > 0 || details.aheadCount > 0) {
+              // Diverged (force-push) — reset to upstream
+              yield* gitCore.resetToUpstream(worktreePath).pipe(Effect.catch(() => Effect.void));
+            }
+          }
+
           return true as const;
         });
 

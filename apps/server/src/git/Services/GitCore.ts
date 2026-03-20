@@ -153,6 +153,13 @@ export interface GitCoreShape {
   readonly pullCurrentBranch: (cwd: string) => Effect.Effect<GitPullResult, GitCommandError>;
 
   /**
+   * Hard-reset the current branch to its upstream tracking ref.
+   * Used when a force-push makes fast-forward impossible.
+   * Caller must verify there are no local changes before calling.
+   */
+  readonly resetToUpstream: (cwd: string) => Effect.Effect<void, GitCommandError>;
+
+  /**
    * Create a worktree and branch from a base branch.
    */
   readonly createWorktree: (

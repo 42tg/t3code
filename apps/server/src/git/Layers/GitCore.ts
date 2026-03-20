@@ -969,6 +969,22 @@ const makeGitCore = Effect.gen(function* () {
       };
     });
 
+  const resetToUpstream: GitCoreShape["resetToUpstream"] = (cwd) =>
+    Effect.gen(function* () {
+      // Fetch the upstream before resetting to ensure it's current
+      const details = yield* statusDetails(cwd);
+      if (!details.hasUpstream) {
+        return yield* createGitCommandError(
+          "GitCore.resetToUpstream",
+          cwd,
+          ["reset", "--hard", "@{u}"],
+          "Current branch has no upstream configured.",
+        );
+      }
+      yield* runGit("GitCore.resetToUpstream.fetch", cwd, ["fetch", "--quiet", "--no-tags"]);
+      yield* runGit("GitCore.resetToUpstream.reset", cwd, ["reset", "--hard", "@{u}"]);
+    });
+
   const readRangeContext: GitCoreShape["readRangeContext"] = (cwd, baseBranch) =>
     Effect.gen(function* () {
       const range = `${baseBranch}..HEAD`;
@@ -1219,6 +1235,8 @@ const makeGitCore = Effect.gen(function* () {
 
       // If the base branch is a remote ref (e.g. "origin/feature"), fetch it first
       // so that the ref is available locally for worktree creation.
+      // Uses an explicit refspec with `+` to force-update the remote tracking ref,
+      // which handles force-pushed branches correctly.
       const remoteRefMatch = input.branch.match(/^([\w.-]+)\/(.*)/);
       if (remoteRefMatch) {
         const [, remoteName, remoteBranch] = remoteRefMatch;
@@ -1226,7 +1244,13 @@ const makeGitCore = Effect.gen(function* () {
           yield* runGit(
             "GitCore.createWorktree.fetch",
             input.cwd,
-            ["fetch", "--quiet", "--no-tags", remoteName, remoteBranch],
+            [
+              "fetch",
+              "--quiet",
+              "--no-tags",
+              remoteName,
+              `+refs/heads/${remoteBranch}:refs/remotes/${remoteName}/${remoteBranch}`,
+            ],
             true, // allowNonZeroExit — fetch failure is not fatal, worktree add will error clearly
           );
         }
@@ -1581,6 +1605,7 @@ const makeGitCore = Effect.gen(function* () {
     commit,
     pushCurrentBranch,
     pullCurrentBranch,
+    resetToUpstream,
     readRangeContext,
     readConfigValue,
     listBranches,
