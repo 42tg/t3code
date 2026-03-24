@@ -63,6 +63,7 @@ import {
 
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
+import { resolveEnabledPlugins } from "@t3tools/shared/claude-plugins";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { getClaudeModelCapabilities } from "./ClaudeProvider.ts";
 import {
@@ -163,6 +164,7 @@ interface ClaudeSessionContext {
   lastAssistantUuid: string | undefined;
   lastThreadStartedId: string | undefined;
   stopped: boolean;
+  interactionMode: "default" | "plan";
 }
 
 interface ClaudeQueryRuntime extends AsyncIterable<SDKMessage> {
@@ -180,6 +182,35 @@ export interface ClaudeAdapterLiveOptions {
   }) => ClaudeQueryRuntime;
   readonly nativeEventLogPath?: string;
   readonly nativeEventLogger?: EventNdjsonLogger;
+}
+
+/** Tools allowed in plan mode — read-only exploration + plan lifecycle. */
+const PLAN_MODE_ALLOWED_TOOLS = new Set([
+  "Read",
+  "Glob",
+  "Grep",
+  "Bash", // plan mode needs Bash for read-only commands (git log, ls, etc.)
+  "ExitPlanMode",
+  "EnterPlanMode",
+  "AskUserQuestion",
+  "EnterWorktree",
+  "ExitWorktree",
+  "Agent",
+  "TaskCreate",
+  "TaskGet",
+  "TaskList",
+  "TaskUpdate",
+  "WebFetch",
+  "WebSearch",
+  "LSP",
+]);
+
+function isPlanModeAllowedTool(toolName: string): boolean {
+  // Allow built-in plan-safe tools
+  if (PLAN_MODE_ALLOWED_TOOLS.has(toolName)) return true;
+  // Allow all MCP tools (they're user-provided and may be read-only)
+  if (toolName.startsWith("mcp__")) return true;
+  return false;
 }
 
 function isUuid(value: string): boolean {
@@ -2699,6 +2730,9 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         ...(fastMode ? { fastMode: true } : {}),
       };
 
+      const resolvedPlugins = resolveEnabledPlugins(input.cwd ? { cwd: input.cwd } : undefined);
+      const sdkPlugins = resolvedPlugins.map((p) => ({ type: "local" as const, path: p.path }));
+
       const queryOptions: ClaudeQueryOptions = {
         ...(input.cwd ? { cwd: input.cwd } : {}),
         ...(apiModelId ? { model: apiModelId } : {}),
@@ -2716,6 +2750,7 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         canUseTool,
         env: process.env,
         ...(input.cwd ? { additionalDirectories: [input.cwd] } : {}),
+        ...(sdkPlugins.length > 0 ? { plugins: sdkPlugins } : {}),
       };
 
       const queryRuntime = yield* Effect.try({

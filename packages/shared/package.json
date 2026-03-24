@@ -43,6 +43,10 @@
     "./String": {
       "types": "./src/String.ts",
       "import": "./src/String.ts"
+    },
+    "./claude-plugins": {
+      "types": "./src/claude-plugins.ts",
+      "import": "./src/claude-plugins.ts"
     }
   },
   "scripts": {
