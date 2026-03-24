@@ -15,6 +15,9 @@ import type {
   GitCreateBranchResult,
   GitCreateWorktreeInput,
   GitCreateWorktreeResult,
+  GitDiffBranchInput,
+  GitDiffBranchResult,
+  GitDiffWorkingTreeInput,
   GitInitInput,
   GitListBranchesInput,
   GitListBranchesResult,
@@ -224,6 +227,20 @@ export interface GitCoreShape {
     cwd: string,
     relativePaths: ReadonlyArray<string>,
   ) => Effect.Effect<ReadonlyArray<string>, GitCommandError>;
+
+  /**
+   * Diff the current HEAD against a base branch (e.g. main).
+   */
+  readonly diffBranch: (
+    input: GitDiffBranchInput,
+  ) => Effect.Effect<GitDiffBranchResult, GitCommandError>;
+
+  /**
+   * Diff the working tree (staged + unstaged) against HEAD.
+   */
+  readonly diffWorkingTree: (
+    input: GitDiffWorkingTreeInput,
+  ) => Effect.Effect<GitDiffBranchResult, GitCommandError>;
 
   /**
    * List local + remote branches and branch metadata.

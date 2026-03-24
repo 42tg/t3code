@@ -10,8 +10,8 @@ export type DiffPanelMode = "inline" | "sheet" | "sidebar";
 function getDiffPanelHeaderRowClassName(mode: DiffPanelMode) {
   const shouldUseDragRegion = isElectron && mode !== "sheet";
   return cn(
-    "flex items-center justify-between gap-2 px-4",
-    shouldUseDragRegion ? "drag-region h-[52px] border-b border-border" : "h-12",
+    "flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2",
+    shouldUseDragRegion && "drag-region border-b border-border",
   );
 }
 

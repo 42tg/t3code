@@ -86,6 +86,9 @@ import {
 import { WorkspaceEntriesLive } from "./workspace/Layers/WorkspaceEntries.ts";
 import { WorkspaceFileSystemLive } from "./workspace/Layers/WorkspaceFileSystem.ts";
 import { WorkspacePathsLive } from "./workspace/Layers/WorkspacePaths.ts";
+import { ReviewCommentRepository } from "./persistence/Services/ReviewCommentRepository.ts";
+import { ReviewRequestRepository } from "./persistence/Services/ReviewRequestRepository.ts";
+import { GitHubCli } from "./git/Services/GitHubCli.ts";
 
 const defaultProjectId = ProjectId.makeUnsafe("project-default");
 const defaultThreadId = ThreadId.makeUnsafe("thread-default");
@@ -415,6 +418,13 @@ const buildAppUnderTest = (options?: {
           enqueueCommand: (effect) => effect,
           ...options?.layers?.serverRuntimeStartup,
         }),
+      ),
+      Layer.provide(
+        Layer.mergeAll(
+          Layer.mock(ReviewCommentRepository)({}),
+          Layer.mock(ReviewRequestRepository)({}),
+          Layer.mock(GitHubCli)({}),
+        ),
       ),
       Layer.provide(workspaceAndProjectServicesLayer),
       Layer.provideMerge(FetchHttpClient.layer),

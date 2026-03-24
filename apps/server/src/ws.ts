@@ -1,4 +1,5 @@
-import { Cause, Effect, Layer, Option, Queue, Ref, Schema, Stream } from "effect";
+import { Cause, Effect, Exit, Layer, Option, Queue, Ref, Schema, Stream } from "effect";
+import { FileSystem, Path } from "effect";
 import {
   CommandId,
   EventId,
@@ -14,6 +15,8 @@ import {
   ProjectSearchEntriesError,
   ProjectWriteFileError,
   OrchestrationReplayEventsError,
+  ReviewCommentError,
+  ReviewRequestError,
   ThreadId,
   type TerminalEvent,
   WS_METHODS,
@@ -47,6 +50,9 @@ import { WorkspaceEntries } from "./workspace/Services/WorkspaceEntries";
 import { WorkspaceFileSystem } from "./workspace/Services/WorkspaceFileSystem";
 import { WorkspacePathOutsideRootError } from "./workspace/Services/WorkspacePaths";
 import { ProjectSetupScriptRunner } from "./project/Services/ProjectSetupScriptRunner";
+import { ReviewCommentRepository } from "./persistence/Services/ReviewCommentRepository";
+import { ReviewRequestRepository } from "./persistence/Services/ReviewRequestRepository";
+import { GitHubCli } from "./git/Services/GitHubCli";
 
 const WsRpcLayer = WsRpcGroup.toLayer(
   Effect.gen(function* () {
@@ -324,6 +330,11 @@ const WsRpcLayer = WsRpcGroup.toLayer(
           ),
         );
     };
+    const reviewCommentRepo = yield* ReviewCommentRepository;
+    const reviewRequestRepo = yield* ReviewRequestRepository;
+    const gitHubCli = yield* GitHubCli;
+    const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
 
     const loadServerConfig = Effect.gen(function* () {
       const keybindingsConfig = yield* keybindings.loadConfigState;
@@ -585,10 +596,10 @@ const WsRpcLayer = WsRpcGroup.toLayer(
               Effect.gen(function* () {
                 const details = yield* git.statusDetails(input.cwd);
                 if (details.aheadCount === 0 || details.behindCount === 0) {
-                  return yield* Effect.fail(pullError);
+                  return yield* Effect.failCause(Cause.fail(pullError));
                 }
                 if (details.hasWorkingTreeChanges) {
-                  return yield* Effect.fail(pullError);
+                  return yield* Effect.failCause(Cause.fail(pullError));
                 }
                 yield* git.resetToUpstream(input.cwd);
                 const refreshed = yield* git.statusDetails(input.cwd);
@@ -677,6 +688,369 @@ const WsRpcLayer = WsRpcGroup.toLayer(
           WS_METHODS.gitInit,
           git.initRepo(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
           { "rpc.aggregate": "git" },
+        ),
+      [WS_METHODS.gitSetBranchUpstream]: (input) =>
+        observeRpcEffect(
+          WS_METHODS.gitSetBranchUpstream,
+          git.setBranchUpstream(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
+          { "rpc.aggregate": "git" },
+        ),
+      [WS_METHODS.gitDiffBranch]: (input) =>
+        observeRpcEffect(WS_METHODS.gitDiffBranch, git.diffBranch(input), {
+          "rpc.aggregate": "git",
+        }),
+      [WS_METHODS.gitDiffWorkingTree]: (input) =>
+        observeRpcEffect(WS_METHODS.gitDiffWorkingTree, git.diffWorkingTree(input), {
+          "rpc.aggregate": "git",
+        }),
+      [WS_METHODS.projectsReadFile]: (input) =>
+        observeRpcEffect(
+          WS_METHODS.projectsReadFile,
+          Effect.gen(function* () {
+            const relativePath = input.relativePath.trim();
+            if (path.isAbsolute(relativePath)) {
+              return yield* new ProjectWriteFileError({ message: "File path must be relative." });
+            }
+            const absolutePath = path.resolve(input.cwd, relativePath);
+            const content = yield* fileSystem
+              .readFileString(absolutePath)
+              .pipe(
+                Effect.mapError(
+                  () => new ProjectWriteFileError({ message: `File not found: ${relativePath}` }),
+                ),
+              );
+            return { content };
+          }),
+          { "rpc.aggregate": "workspace" },
+        ),
+      [WS_METHODS.projectsResolveFromWorkspace]: (input) =>
+        observeRpcEffect(
+          WS_METHODS.projectsResolveFromWorkspace,
+          Effect.gen(function* () {
+            for (const root of input.workspaceRoots) {
+              const candidate = path.resolve(root, input.repository);
+              const exists = yield* fileSystem.stat(candidate).pipe(
+                Effect.map(() => true),
+                Effect.catch(() => Effect.succeed(false)),
+              );
+              if (exists) return { cwd: candidate };
+            }
+            return { cwd: null };
+          }),
+          { "rpc.aggregate": "workspace" },
+        ),
+      [WS_METHODS.reviewCommentAdd]: (input) =>
+        observeRpcEffect(
+          WS_METHODS.reviewCommentAdd,
+          reviewCommentRepo.add(input).pipe(
+            Effect.map((comment) => ({ comment })),
+            Effect.mapError((cause) => new ReviewCommentError({ message: cause.message, cause })),
+          ),
+          { "rpc.aggregate": "review" },
+        ),
+      [WS_METHODS.reviewCommentUpdate]: (input) =>
+        observeRpcEffect(
+          WS_METHODS.reviewCommentUpdate,
+          reviewCommentRepo
+            .update(input)
+            .pipe(
+              Effect.mapError((cause) => new ReviewCommentError({ message: cause.message, cause })),
+            ),
+          { "rpc.aggregate": "review" },
+        ),
+      [WS_METHODS.reviewCommentDelete]: (input) =>
+        observeRpcEffect(
+          WS_METHODS.reviewCommentDelete,
+          reviewCommentRepo
+            .delete(input)
+            .pipe(
+              Effect.mapError((cause) => new ReviewCommentError({ message: cause.message, cause })),
+            ),
+          { "rpc.aggregate": "review" },
+        ),
+      [WS_METHODS.reviewCommentList]: (input) =>
+        observeRpcEffect(
+          WS_METHODS.reviewCommentList,
+          reviewCommentRepo.listByThreadId(input).pipe(
+            Effect.map((comments) => ({ comments: Array.from(comments) })),
+            Effect.mapError((cause) => new ReviewCommentError({ message: cause.message, cause })),
+          ),
+          { "rpc.aggregate": "review" },
+        ),
+      [WS_METHODS.reviewCommentPublish]: (input) =>
+        observeRpcEffect(
+          WS_METHODS.reviewCommentPublish,
+          Effect.gen(function* () {
+            const allComments = yield* reviewCommentRepo.listByThreadId({
+              threadId: input.threadId,
+            });
+            const comments = input.commentId
+              ? allComments.filter((c) => c.id === input.commentId)
+              : [...allComments];
+
+            if (comments.length === 0) {
+              return { published: 0 };
+            }
+
+            const prUrlMatch = input.prUrl.match(/github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)/);
+            if (!prUrlMatch) {
+              return yield* new ReviewCommentError({
+                message: "Invalid PR URL format. Expected: https://github.com/owner/repo/pull/123",
+              });
+            }
+            const [, owner, repo, prNumber] = prUrlMatch;
+
+            const headSha = yield* gitHubCli
+              .execute({
+                cwd: input.cwd,
+                args: ["api", `repos/${owner}/${repo}/pulls/${prNumber}`, "--jq", ".head.sha"],
+                timeoutMs: 15_000,
+              })
+              .pipe(
+                Effect.map((r) => r.stdout.trim()),
+                Effect.catch(() => Effect.succeed("HEAD")),
+              );
+
+            const prFiles = yield* gitHubCli
+              .execute({
+                cwd: input.cwd,
+                args: [
+                  "api",
+                  `repos/${owner}/${repo}/pulls/${prNumber}/files`,
+                  "--jq",
+                  ".[].filename",
+                ],
+                timeoutMs: 15_000,
+              })
+              .pipe(
+                Effect.map((r) => new Set(r.stdout.trim().split("\n").filter(Boolean))),
+                Effect.catch(() => Effect.succeed(null as Set<string> | null)),
+              );
+
+            if (prFiles) {
+              const outsideDiff = comments.filter((c) => !prFiles.has(c.file));
+              if (outsideDiff.length > 0) {
+                const fileNames = outsideDiff.map((c) => c.file.split("/").pop()).join(", ");
+                return {
+                  published: 0,
+                  failed: outsideDiff.length,
+                  error: `Cannot publish comments on files outside the PR diff: ${fileNames}`,
+                };
+              }
+            }
+
+            let published = 0;
+            let failed = 0;
+            let lastUrl: string | undefined;
+            let lastError: string | undefined;
+
+            for (const comment of comments) {
+              const result = yield* gitHubCli
+                .execute({
+                  cwd: input.cwd,
+                  args: [
+                    "api",
+                    `repos/${owner}/${repo}/pulls/${prNumber}/comments`,
+                    "-X",
+                    "POST",
+                    "-f",
+                    `body=${comment.body}`,
+                    "-f",
+                    `commit_id=${headSha}`,
+                    "-f",
+                    `path=${comment.file}`,
+                    "-F",
+                    `line=${String(comment.startLine)}`,
+                    "--jq",
+                    ".html_url",
+                  ],
+                  timeoutMs: 15_000,
+                })
+                .pipe(Effect.exit);
+
+              if (Exit.isSuccess(result)) {
+                const url = result.value.stdout.trim();
+                lastUrl = url;
+                published++;
+                yield* reviewCommentRepo
+                  .update({
+                    id: comment.id,
+                    publishedAt: new Date().toISOString(),
+                    ...(url ? { publishedUrl: url } : {}),
+                  })
+                  .pipe(Effect.ignore);
+              } else {
+                failed++;
+                lastError = Cause.pretty(result.cause);
+              }
+            }
+
+            return {
+              published,
+              ...(failed > 0 ? { failed } : {}),
+              ...(lastUrl ? { url: lastUrl } : {}),
+              ...(lastError ? { error: lastError } : {}),
+            };
+          }).pipe(
+            Effect.mapError((cause) =>
+              Schema.is(ReviewCommentError)(cause)
+                ? cause
+                : new ReviewCommentError({ message: String(cause), cause }),
+            ),
+          ),
+          { "rpc.aggregate": "review" },
+        ),
+      [WS_METHODS.reviewRequestUpsert]: (input) =>
+        observeRpcEffect(
+          WS_METHODS.reviewRequestUpsert,
+          Effect.gen(function* () {
+            const reviewRequest = yield* reviewRequestRepo.upsert({
+              prUrl: input.prUrl,
+              prNumber: input.prNumber,
+              prTitle: input.prTitle,
+              repoNameWithOwner: input.repoNameWithOwner,
+              authorLogin: "",
+              isBot: false,
+            });
+            if (input.threadId) {
+              yield* reviewRequestRepo.updateStatus({
+                id: reviewRequest.id,
+                status: "in_review",
+                threadId: input.threadId,
+              });
+            }
+            return { reviewRequest };
+          }).pipe(
+            Effect.mapError((cause) => new ReviewRequestError({ message: cause.message, cause })),
+          ),
+          { "rpc.aggregate": "review" },
+        ),
+      [WS_METHODS.reviewRequestList]: (_input) =>
+        observeRpcEffect(
+          WS_METHODS.reviewRequestList,
+          Effect.gen(function* () {
+            const ghResults = yield* gitHubCli
+              .listReviewRequests({ limit: 30 })
+              .pipe(Effect.catch(() => Effect.succeed([] as const)));
+
+            for (const pr of ghResults) {
+              const login = pr.author.login.toLowerCase();
+              const isBot =
+                login.endsWith("[bot]") ||
+                login === "dependabot" ||
+                login === "renovate" ||
+                login === "github-actions" ||
+                login === "greenkeeper" ||
+                login === "snyk-bot" ||
+                login === "mergify" ||
+                login === "codecov" ||
+                login === "allcontributors";
+              yield* reviewRequestRepo
+                .upsert({
+                  prUrl: pr.url,
+                  prNumber: pr.number,
+                  prTitle: pr.title,
+                  repoNameWithOwner: pr.repository.nameWithOwner,
+                  authorLogin: pr.author.login,
+                  isBot,
+                  ...(pr.body ? { prBody: pr.body } : {}),
+                  prLabels: pr.labels.map((l) => l.name),
+                })
+                .pipe(Effect.ignore);
+            }
+
+            if (ghResults.length > 0) {
+              yield* reviewRequestRepo
+                .dismissStale(ghResults.map((pr) => pr.url))
+                .pipe(Effect.ignore);
+            }
+
+            yield* reviewRequestRepo.unlinkDeletedThreads().pipe(Effect.ignore);
+
+            const reviewRequests = yield* reviewRequestRepo.listActive();
+            return { reviewRequests: Array.from(reviewRequests) };
+          }).pipe(
+            Effect.mapError((cause) =>
+              Schema.is(ReviewRequestError)(cause)
+                ? cause
+                : new ReviewRequestError({ message: String(cause), cause }),
+            ),
+          ),
+          { "rpc.aggregate": "review" },
+        ),
+      [WS_METHODS.reviewRequestDismiss]: (input) =>
+        observeRpcEffect(
+          WS_METHODS.reviewRequestDismiss,
+          reviewRequestRepo
+            .updateStatus({ id: input.id, status: "dismissed" })
+            .pipe(
+              Effect.mapError((cause) => new ReviewRequestError({ message: cause.message, cause })),
+            ),
+          { "rpc.aggregate": "review" },
+        ),
+      [WS_METHODS.reviewRequestReopen]: (input) =>
+        observeRpcEffect(
+          WS_METHODS.reviewRequestReopen,
+          reviewRequestRepo
+            .updateStatus({ id: input.id, status: "pending" })
+            .pipe(
+              Effect.mapError((cause) => new ReviewRequestError({ message: cause.message, cause })),
+            ),
+          { "rpc.aggregate": "review" },
+        ),
+      [WS_METHODS.reviewRequestLinkThread]: (input) =>
+        observeRpcEffect(
+          WS_METHODS.reviewRequestLinkThread,
+          reviewRequestRepo
+            .updateStatus({
+              id: input.id,
+              status: "in_review",
+              threadId: input.threadId,
+            })
+            .pipe(
+              Effect.mapError((cause) => new ReviewRequestError({ message: cause.message, cause })),
+            ),
+          { "rpc.aggregate": "review" },
+        ),
+      [WS_METHODS.reviewRequestSubmit]: (input) =>
+        observeRpcEffect(
+          WS_METHODS.reviewRequestSubmit,
+          Effect.gen(function* () {
+            const prUrlMatch = input.prUrl.match(/github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)/);
+            if (!prUrlMatch) {
+              return yield* new ReviewRequestError({
+                message: "Invalid PR URL format. Expected: https://github.com/owner/repo/pull/123",
+              });
+            }
+            const [, owner, repo, prNumber] = prUrlMatch;
+
+            yield* gitHubCli.execute({
+              cwd: process.cwd(),
+              args: [
+                "api",
+                `repos/${owner}/${repo}/pulls/${prNumber}/reviews`,
+                "-X",
+                "POST",
+                "-f",
+                `event=${input.event}`,
+                "-f",
+                `body=${input.body ?? ""}`,
+              ],
+              timeoutMs: 15_000,
+            });
+
+            yield* reviewRequestRepo.updateStatus({
+              id: input.id,
+              status: input.event === "APPROVE" ? "approved" : "changes_requested",
+            });
+          }).pipe(
+            Effect.mapError((cause) =>
+              Schema.is(ReviewRequestError)(cause)
+                ? cause
+                : new ReviewRequestError({ message: String(cause), cause }),
+            ),
+          ),
+          { "rpc.aggregate": "review" },
         ),
       [WS_METHODS.terminalOpen]: (input) =>
         observeRpcEffect(WS_METHODS.terminalOpen, terminalManager.open(input), {

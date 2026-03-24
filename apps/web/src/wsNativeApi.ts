@@ -52,6 +52,11 @@ export function createWsNativeApi(): NativeApi {
     projects: {
       searchEntries: rpcClient.projects.searchEntries,
       writeFile: rpcClient.projects.writeFile,
+      readFile: rpcClient.projects.readFile,
+      resolveFromWorkspace: async (input) => {
+        const result = await rpcClient.projects.resolveFromWorkspace(input);
+        return { cwd: result.cwd ?? "", cloned: false };
+      },
     },
     shell: {
       openInEditor: (cwd, editor) => rpcClient.shell.openInEditor({ cwd, editor }),
@@ -71,14 +76,35 @@ export function createWsNativeApi(): NativeApi {
       pull: rpcClient.git.pull,
       refreshStatus: rpcClient.git.refreshStatus,
       onStatus: (input, callback, options) => rpcClient.git.onStatus(input, callback, options),
+      diffBranch: rpcClient.git.diffBranch,
+      diffWorkingTree: rpcClient.git.diffWorkingTree,
       listBranches: rpcClient.git.listBranches,
       createWorktree: rpcClient.git.createWorktree,
       removeWorktree: rpcClient.git.removeWorktree,
       createBranch: rpcClient.git.createBranch,
       checkout: rpcClient.git.checkout,
       init: rpcClient.git.init,
+      setBranchUpstream: rpcClient.git.setBranchUpstream,
       resolvePullRequest: rpcClient.git.resolvePullRequest,
       preparePullRequestThread: rpcClient.git.preparePullRequestThread,
+    },
+    reviewComment: {
+      add: rpcClient.reviewComment.add,
+      update: rpcClient.reviewComment.update,
+      delete: rpcClient.reviewComment.delete,
+      list: rpcClient.reviewComment.list,
+      publish: rpcClient.reviewComment.publish,
+    },
+    reviewRequest: {
+      upsert: async (input) => {
+        const result = await rpcClient.reviewRequest.upsert(input);
+        return result.reviewRequest;
+      },
+      list: rpcClient.reviewRequest.list,
+      dismiss: rpcClient.reviewRequest.dismiss,
+      reopen: rpcClient.reviewRequest.reopen,
+      linkThread: rpcClient.reviewRequest.linkThread,
+      submit: rpcClient.reviewRequest.submit,
     },
     contextMenu: {
       show: async <T extends string>(

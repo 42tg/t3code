@@ -1560,16 +1560,12 @@ export const makeGitCore = Effect.fn("makeGitCore")(function* (options?: {
 
   const resetToUpstream: GitCoreShape["resetToUpstream"] = (cwd) =>
     Effect.gen(function* () {
-      const upstream = yield* runGitStdout(
-        "GitCore.resetToUpstream.upstream",
-        cwd,
-        ["rev-parse", "--abbrev-ref", "@{upstream}"],
-      );
-      yield* runGit("GitCore.resetToUpstream.reset", cwd, [
-        "reset",
-        "--hard",
-        upstream.trim(),
+      const upstream = yield* runGitStdout("GitCore.resetToUpstream.upstream", cwd, [
+        "rev-parse",
+        "--abbrev-ref",
+        "@{upstream}",
       ]);
+      yield* runGit("GitCore.resetToUpstream.reset", cwd, ["reset", "--hard", upstream.trim()]);
     });
 
   const readRangeContext: GitCoreShape["readRangeContext"] = Effect.fn("readRangeContext")(
@@ -2138,6 +2134,42 @@ export const makeGitCore = Effect.fn("makeGitCore")(function* (options?: {
       ),
     );
 
+  const diffBranch: GitCoreShape["diffBranch"] = (input) =>
+    Effect.gen(function* () {
+      // Prefer the remote-tracking ref (e.g. origin/main) over the local branch
+      // because local branches in worktrees are often stale.
+      let baseRef = input.base;
+      if (!input.base.includes("/")) {
+        const hasRemote = yield* remoteBranchExists(input.cwd, "origin", input.base);
+        if (hasRemote) baseRef = `origin/${input.base}`;
+      }
+      const mergeBase = yield* runGitStdout("GitCore.diffBranch.mergeBase", input.cwd, [
+        "merge-base",
+        baseRef,
+        "HEAD",
+      ]);
+      const diff = yield* runGitStdout(
+        "GitCore.diffBranch.diff",
+        input.cwd,
+        ["diff", mergeBase.trim(), "HEAD"],
+        true,
+      );
+      return { diff };
+    });
+
+  const diffWorkingTree: GitCoreShape["diffWorkingTree"] = (input) =>
+    Effect.gen(function* () {
+      const [staged, unstaged] = yield* Effect.all(
+        [
+          runGitStdout("GitCore.diffWorkingTree.staged", input.cwd, ["diff", "--cached"], true),
+          runGitStdout("GitCore.diffWorkingTree.unstaged", input.cwd, ["diff"], true),
+        ],
+        { concurrency: "unbounded" },
+      );
+      const diff = [staged, unstaged].filter((s) => s.length > 0).join("\n");
+      return { diff };
+    });
+
   return {
     execute,
     status,
@@ -2153,6 +2185,8 @@ export const makeGitCore = Effect.fn("makeGitCore")(function* (options?: {
     isInsideWorkTree,
     listWorkspaceFiles,
     filterIgnoredPaths,
+    diffBranch,
+    diffWorkingTree,
     listBranches,
     createWorktree,
     fetchPullRequestBranch,
