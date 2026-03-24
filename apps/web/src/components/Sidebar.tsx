@@ -106,6 +106,8 @@ import {
   SidebarMenuSubItem,
   SidebarSeparator,
   SidebarTrigger,
+  useSidebar,
+  PullToReveal,
 } from "./ui/sidebar";
 import { useThreadSelectionStore } from "../threadSelectionStore";
 import { isNonEmpty as isNonEmptyString } from "effect/String";
@@ -666,6 +668,7 @@ function SortableProjectItem({
 }
 
 export default function Sidebar() {
+  const { isMobile, setOpenMobile } = useSidebar();
   const projects = useStore((store) => store.projects);
   const sidebarThreadsById = useStore((store) => store.sidebarThreadsById);
   const threadIdsByProjectId = useStore((store) => store.threadIdsByProjectId);
@@ -1203,6 +1206,9 @@ export default function Sidebar() {
         clearSelection();
       }
       setSelectionAnchor(threadId);
+      if (isMobile) {
+        setOpenMobile(false);
+      }
       void navigate({
         to: "/$threadId",
         params: { threadId },
@@ -1210,9 +1216,11 @@ export default function Sidebar() {
     },
     [
       clearSelection,
+      isMobile,
       navigate,
       rangeSelectTo,
       selectedThreadIds.size,
+      setOpenMobile,
       setSelectionAnchor,
       toggleThreadSelection,
     ],
@@ -1224,12 +1232,15 @@ export default function Sidebar() {
         clearSelection();
       }
       setSelectionAnchor(threadId);
+      if (isMobile) {
+        setOpenMobile(false);
+      }
       void navigate({
         to: "/$threadId",
         params: { threadId },
       });
     },
-    [clearSelection, navigate, selectedThreadIds.size, setSelectionAnchor],
+    [clearSelection, isMobile, navigate, selectedThreadIds.size, setOpenMobile, setSelectionAnchor],
   );
 
   const handleProjectContextMenu = useCallback(
@@ -2004,7 +2015,8 @@ export default function Sidebar() {
         <SettingsSidebarNav pathname={pathname} />
       ) : (
         <>
-          <SidebarContent className="gap-0">
+          <PullToReveal onPull={() => {}} disabled={!isMobile}>
+            <SidebarContent className="gap-0">
             {showArm64IntelBuildWarning && arm64IntelBuildWarningDescription ? (
               <SidebarGroup className="px-2 pt-2 pb-0">
                 <Alert variant="warning" className="rounded-2xl border-warning/40 bg-warning/8">
@@ -2164,7 +2176,8 @@ export default function Sidebar() {
                 </div>
               )}
             </SidebarGroup>
-          </SidebarContent>
+            </SidebarContent>
+          </PullToReveal>
 
           <SidebarSeparator />
           <SidebarFooter className="p-2">
