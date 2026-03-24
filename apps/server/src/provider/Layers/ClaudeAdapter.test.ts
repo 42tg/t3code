@@ -25,6 +25,7 @@ import { ServerSettingsService } from "../../serverSettings.ts";
 import { ProviderAdapterValidationError } from "../Errors.ts";
 import { ClaudeAdapter } from "../Services/ClaudeAdapter.ts";
 import { makeClaudeAdapterLive, type ClaudeAdapterLiveOptions } from "./ClaudeAdapter.ts";
+import { ReviewCommentRepository } from "../../persistence/Services/ReviewCommentRepository.ts";
 
 class FakeClaudeQuery implements AsyncIterable<SDKMessage> {
   private readonly queue: Array<SDKMessage> = [];
@@ -171,6 +172,15 @@ function makeHarness(config?: {
       ),
       Layer.provideMerge(ServerSettingsService.layerTest()),
       Layer.provideMerge(NodeServices.layer),
+      Layer.provideMerge(
+        Layer.succeed(ReviewCommentRepository, {
+          add: () => Effect.die("not implemented in test"),
+          update: () => Effect.die("not implemented in test"),
+          delete: () => Effect.die("not implemented in test"),
+          listByThreadId: () => Effect.succeed([]),
+          deleteByThreadId: () => Effect.die("not implemented in test"),
+        }),
+      ),
     ),
     query,
     getLastCreateQueryInput: () => createInput,
@@ -1200,6 +1210,15 @@ describe("ClaudeAdapterLive", () => {
       Layer.provideMerge(ServerConfig.layerTest("/tmp/claude-adapter-test", "/tmp")),
       Layer.provideMerge(ServerSettingsService.layerTest()),
       Layer.provideMerge(NodeServices.layer),
+      Layer.provideMerge(
+        Layer.succeed(ReviewCommentRepository, {
+          add: () => Effect.die("not implemented in test"),
+          update: () => Effect.die("not implemented in test"),
+          delete: () => Effect.die("not implemented in test"),
+          listByThreadId: () => Effect.succeed([]),
+          deleteByThreadId: () => Effect.die("not implemented in test"),
+        }),
+      ),
     );
 
     return Effect.gen(function* () {

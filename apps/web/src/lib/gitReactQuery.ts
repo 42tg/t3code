@@ -21,6 +21,9 @@ export const gitQueryKeys = {
   branches: (cwd: string | null) => ["git", "branches", cwd] as const,
   branchSearch: (cwd: string | null, query: string) =>
     ["git", "branches", cwd, "search", query] as const,
+  diffBranch: (cwd: string | null, base: string | null) =>
+    ["git", "diffBranch", cwd, base] as const,
+  diffWorkingTree: (cwd: string | null) => ["git", "diffWorkingTree", cwd] as const,
 };
 
 export const gitMutationKeys = {
@@ -75,6 +78,48 @@ export function gitBranchSearchInfiniteQueryOptions(input: {
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
     refetchInterval: GIT_BRANCHES_REFETCH_INTERVAL_MS,
+  });
+}
+
+export function gitDefaultBranchQueryOptions(cwd: string | null) {
+  return queryOptions({
+    queryKey: ["git", "defaultBranch", cwd] as const,
+    queryFn: async () => {
+      const api = ensureNativeApi();
+      if (!cwd) throw new Error("Git branches are unavailable.");
+      const result = await api.git.listBranches({ cwd, limit: GIT_BRANCHES_PAGE_SIZE });
+      return result.branches.find((b) => b.isDefault)?.name ?? null;
+    },
+    enabled: cwd !== null,
+    staleTime: GIT_BRANCHES_STALE_TIME_MS,
+  });
+}
+
+export function gitDiffBranchQueryOptions(input: { cwd: string | null; base: string | null }) {
+  return queryOptions({
+    queryKey: gitQueryKeys.diffBranch(input.cwd, input.base),
+    queryFn: async () => {
+      const api = ensureNativeApi();
+      if (!input.cwd || !input.base) throw new Error("Git diff is unavailable.");
+      return api.git.diffBranch({ cwd: input.cwd, base: input.base });
+    },
+    enabled: input.cwd !== null && input.base !== null,
+    staleTime: 10_000,
+    refetchOnWindowFocus: "always",
+  });
+}
+
+export function gitDiffWorkingTreeQueryOptions(cwd: string | null) {
+  return queryOptions({
+    queryKey: gitQueryKeys.diffWorkingTree(cwd),
+    queryFn: async () => {
+      const api = ensureNativeApi();
+      if (!cwd) throw new Error("Git working tree diff is unavailable.");
+      return api.git.diffWorkingTree({ cwd });
+    },
+    enabled: cwd !== null,
+    staleTime: 5_000,
+    refetchOnWindowFocus: "always",
   });
 }
 

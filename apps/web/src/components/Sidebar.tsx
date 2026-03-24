@@ -13,6 +13,8 @@ import {
 import { ProjectFavicon } from "./ProjectFavicon";
 import { autoAnimate } from "@formkit/auto-animate";
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -131,6 +133,10 @@ import { useSettings, useUpdateSettings } from "~/hooks/useSettings";
 import { useServerKeybindings } from "../rpc/serverState";
 import { useSidebarThreadSummaryById } from "../storeSelectors";
 import type { Project } from "../types";
+import { Dialog, DialogPopup } from "./ui/dialog";
+
+const LazyStandaloneReviewPrDialog = lazy(() => import("./StandaloneReviewPrDialog"));
+const LazyNotificationBell = lazy(() => import("./NotificationBell"));
 const THREAD_PREVIEW_LIMIT = 6;
 const SIDEBAR_SORT_LABELS: Record<SidebarProjectSortOrder, string> = {
   updated_at: "Last user message",
@@ -733,6 +739,11 @@ export default function Sidebar() {
   const suppressProjectClickAfterDragRef = useRef(false);
   const suppressProjectClickForContextMenuRef = useRef(false);
   const [desktopUpdateState, setDesktopUpdateState] = useState<DesktopUpdateState | null>(null);
+  const [standaloneReviewOpen, setStandaloneReviewOpen] = useState(false);
+  const [pendingReviewRequest, setPendingReviewRequest] = useState<{
+    prUrl: string;
+    requestId: string;
+  } | null>(null);
   const selectedThreadIds = useThreadSelectionStore((s) => s.selectedThreadIds);
   const toggleThreadSelection = useThreadSelectionStore((s) => s.toggleThread);
   const rangeSelectTo = useThreadSelectionStore((s) => s.rangeSelectTo);
@@ -2086,10 +2097,30 @@ export default function Sidebar() {
       {isElectron ? (
         <SidebarHeader className="drag-region h-[52px] flex-row items-center gap-2 px-4 py-0 pl-[90px]">
           {wordmark}
+          <div className="ml-auto flex items-center gap-1">
+            <Suspense fallback={null}>
+              <LazyNotificationBell
+                onStartReview={(prUrl, requestId) => {
+                  setPendingReviewRequest({ prUrl, requestId });
+                  setStandaloneReviewOpen(true);
+                }}
+              />
+            </Suspense>
+          </div>
         </SidebarHeader>
       ) : (
-        <SidebarHeader className="gap-3 px-3 py-2 sm:gap-2.5 sm:px-4 sm:py-3">
+        <SidebarHeader className="flex-row items-center gap-3 px-3 py-2 sm:gap-2.5 sm:px-4 sm:py-3">
           {wordmark}
+          <div className="ml-auto">
+            <Suspense fallback={null}>
+              <LazyNotificationBell
+                onStartReview={(prUrl, requestId) => {
+                  setPendingReviewRequest({ prUrl, requestId });
+                  setStandaloneReviewOpen(true);
+                }}
+              />
+            </Suspense>
+          </div>
         </SidebarHeader>
       )}
 
@@ -2137,6 +2168,21 @@ export default function Sidebar() {
                       updateSettings({ sidebarThreadSortOrder: sortOrder });
                     }}
                   />
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          aria-label="Review PR"
+                          className="inline-flex size-5 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
+                          onClick={() => setStandaloneReviewOpen(true)}
+                        />
+                      }
+                    >
+                      <GitPullRequestIcon className="size-3.5" />
+                    </TooltipTrigger>
+                    <TooltipPopup side="right">Review PR</TooltipPopup>
+                  </Tooltip>
                   <Tooltip>
                     <TooltipTrigger
                       render={
@@ -2277,6 +2323,29 @@ export default function Sidebar() {
           </SidebarFooter>
         </>
       )}
+
+      <Suspense fallback={null}>
+        <Dialog
+          open={standaloneReviewOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              setStandaloneReviewOpen(false);
+              setPendingReviewRequest(null);
+            }
+          }}
+        >
+          <DialogPopup>
+            <LazyStandaloneReviewPrDialog
+              projects={projects}
+              {...(pendingReviewRequest?.prUrl ? { initialPrUrl: pendingReviewRequest.prUrl } : {})}
+              onClose={() => {
+                setStandaloneReviewOpen(false);
+                setPendingReviewRequest(null);
+              }}
+            />
+          </DialogPopup>
+        </Dialog>
+      </Suspense>
     </>
   );
 }
