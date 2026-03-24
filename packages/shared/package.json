@@ -51,6 +51,10 @@
     "./projectScripts": {
       "types": "./src/projectScripts.ts",
       "import": "./src/projectScripts.ts"
+    },
+    "./claude-plugins": {
+      "types": "./src/claude-plugins.ts",
+      "import": "./src/claude-plugins.ts"
     }
   },
   "scripts": {

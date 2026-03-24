@@ -63,6 +63,7 @@ import {
 
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
+import { resolveEnabledPlugins } from "@t3tools/shared/claude-plugins";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { getClaudeModelCapabilities } from "./ClaudeProvider.ts";
 import {
@@ -163,6 +164,7 @@ interface ClaudeSessionContext {
   lastAssistantUuid: string | undefined;
   lastThreadStartedId: string | undefined;
   stopped: boolean;
+  interactionMode: "default" | "plan";
 }
 
 interface ClaudeQueryRuntime extends AsyncIterable<SDKMessage> {
@@ -2699,6 +2701,9 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         ...(fastMode ? { fastMode: true } : {}),
       };
 
+      const resolvedPlugins = resolveEnabledPlugins(input.cwd ? { cwd: input.cwd } : undefined);
+      const sdkPlugins = resolvedPlugins.map((p) => ({ type: "local" as const, path: p.path }));
+
       const queryOptions: ClaudeQueryOptions = {
         ...(input.cwd ? { cwd: input.cwd } : {}),
         ...(apiModelId ? { model: apiModelId } : {}),
@@ -2716,6 +2721,7 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         canUseTool,
         env: process.env,
         ...(input.cwd ? { additionalDirectories: [input.cwd] } : {}),
+        ...(sdkPlugins.length > 0 ? { plugins: sdkPlugins } : {}),
       };
 
       const queryRuntime = yield* Effect.try({
