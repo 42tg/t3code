@@ -85,6 +85,8 @@ interface BranchHeadContext {
   remoteName: string | null;
   headRepositoryNameWithOwner: string | null;
   headRepositoryOwnerLogin: string | null;
+  /** The origin remote's owner/repo — used to target the correct repo for PR creation in forks. */
+  originRepositoryNameWithOwner: string | null;
   isCrossRepository: boolean;
 }
 
@@ -876,6 +878,7 @@ export const makeGitManager = Effect.fn("makeGitManager")(function* () {
       remoteName,
       headRepositoryNameWithOwner: remoteRepository.repositoryNameWithOwner,
       headRepositoryOwnerLogin: remoteRepository.ownerLogin,
+      originRepositoryNameWithOwner: originRepository.repositoryNameWithOwner,
       isCrossRepository,
     } satisfies BranchHeadContext;
   });
@@ -1330,6 +1333,7 @@ export const makeGitManager = Effect.fn("makeGitManager")(function* () {
         headSelector: headContext.preferredHeadSelector,
         title: generated.title,
         bodyFile,
+        repo: headContext.originRepositoryNameWithOwner,
       })
       .pipe(Effect.ensuring(fileSystem.remove(bodyFile).pipe(Effect.catch(() => Effect.void))));
 

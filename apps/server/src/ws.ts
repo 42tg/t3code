@@ -581,6 +581,24 @@ const WsRpcLayer = WsRpcGroup.toLayer(
         observeRpcEffect(
           WS_METHODS.gitPull,
           git.pullCurrentBranch(input.cwd).pipe(
+            Effect.catch((pullError) =>
+              Effect.gen(function* () {
+                const details = yield* git.statusDetails(input.cwd);
+                if (details.aheadCount === 0 || details.behindCount === 0) {
+                  return yield* Effect.fail(pullError);
+                }
+                if (details.hasWorkingTreeChanges) {
+                  return yield* Effect.fail(pullError);
+                }
+                yield* git.resetToUpstream(input.cwd);
+                const refreshed = yield* git.statusDetails(input.cwd);
+                return {
+                  status: "pulled" as const,
+                  branch: refreshed.branch ?? "unknown",
+                  upstreamBranch: refreshed.upstreamRef,
+                };
+              }),
+            ),
             Effect.matchCauseEffect({
               onFailure: (cause) => Effect.failCause(cause),
               onSuccess: (result) =>
