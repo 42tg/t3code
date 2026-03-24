@@ -1,12 +1,18 @@
 import { parsePatchFiles } from "@pierre/diffs";
-import { FileDiff, type FileDiffMetadata, Virtualizer } from "@pierre/diffs/react";
-import { useQuery } from "@tanstack/react-query";
+import type { FileDiffMetadata } from "@pierre/diffs/react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { ThreadId, type TurnId } from "@t3tools/contracts";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
+  ChevronsDownUpIcon,
+  ChevronsUpDownIcon,
   Columns2Icon,
+  FolderXIcon,
+  GitBranchIcon,
+  ListTreeIcon,
+  LoaderIcon,
   Rows3Icon,
   TextWrapIcon,
 } from "lucide-react";
@@ -19,7 +25,13 @@ import {
   useState,
 } from "react";
 import { openInPreferredEditor } from "../editorPreferences";
-import { gitBranchesQueryOptions } from "~/lib/gitReactQuery";
+import {
+  gitBranchesQueryOptions,
+  gitCreateWorktreeMutationOptions,
+  gitDiffBranchQueryOptions,
+  gitDiffWorkingTreeQueryOptions,
+  gitStatusQueryOptions,
+} from "~/lib/gitReactQuery";
 import { checkpointDiffQueryOptions } from "~/lib/providerReactQuery";
 import { cn } from "~/lib/utils";
 import { readNativeApi } from "../nativeApi";
@@ -27,80 +39,22 @@ import { resolvePathLinkTarget } from "../terminal-links";
 import { parseDiffRouteSearch, stripDiffSearchParams } from "../diffRouteSearch";
 import { useTheme } from "../hooks/useTheme";
 import { buildPatchCacheKey } from "../lib/diffRendering";
-import { resolveDiffThemeName } from "../lib/diffRendering";
 import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
+import { useReviewAnnotations } from "../hooks/useReviewAnnotations";
 import { useStore } from "../store";
 import { useSettings } from "../hooks/useSettings";
 import { formatShortTimestamp } from "../timestampFormat";
 import { DiffPanelLoadingState, DiffPanelShell, type DiffPanelMode } from "./DiffPanelShell";
+import { Button } from "./ui/button";
 import { ToggleGroup, Toggle } from "./ui/toggle-group";
+import {
+  DiffFileList,
+  buildFileDiffRenderKey,
+  resolveFileDiffPath,
+  type DiffRenderMode,
+} from "./diff/DiffFileList";
 
-type DiffRenderMode = "stacked" | "split";
-type DiffThemeType = "light" | "dark";
-
-const DIFF_PANEL_UNSAFE_CSS = `
-[data-diffs-header],
-[data-diff],
-[data-file],
-[data-error-wrapper],
-[data-virtualizer-buffer] {
-  --diffs-bg: color-mix(in srgb, var(--card) 90%, var(--background)) !important;
-  --diffs-light-bg: color-mix(in srgb, var(--card) 90%, var(--background)) !important;
-  --diffs-dark-bg: color-mix(in srgb, var(--card) 90%, var(--background)) !important;
-  --diffs-token-light-bg: transparent;
-  --diffs-token-dark-bg: transparent;
-
-  --diffs-bg-context-override: color-mix(in srgb, var(--background) 97%, var(--foreground));
-  --diffs-bg-hover-override: color-mix(in srgb, var(--background) 94%, var(--foreground));
-  --diffs-bg-separator-override: color-mix(in srgb, var(--background) 95%, var(--foreground));
-  --diffs-bg-buffer-override: color-mix(in srgb, var(--background) 90%, var(--foreground));
-
-  --diffs-bg-addition-override: color-mix(in srgb, var(--background) 92%, var(--success));
-  --diffs-bg-addition-number-override: color-mix(in srgb, var(--background) 88%, var(--success));
-  --diffs-bg-addition-hover-override: color-mix(in srgb, var(--background) 85%, var(--success));
-  --diffs-bg-addition-emphasis-override: color-mix(in srgb, var(--background) 80%, var(--success));
-
-  --diffs-bg-deletion-override: color-mix(in srgb, var(--background) 92%, var(--destructive));
-  --diffs-bg-deletion-number-override: color-mix(in srgb, var(--background) 88%, var(--destructive));
-  --diffs-bg-deletion-hover-override: color-mix(in srgb, var(--background) 85%, var(--destructive));
-  --diffs-bg-deletion-emphasis-override: color-mix(
-    in srgb,
-    var(--background) 80%,
-    var(--destructive)
-  );
-
-  background-color: var(--diffs-bg) !important;
-}
-
-[data-file-info] {
-  background-color: color-mix(in srgb, var(--card) 94%, var(--foreground)) !important;
-  border-block-color: var(--border) !important;
-  color: var(--foreground) !important;
-}
-
-[data-diffs-header] {
-  position: sticky !important;
-  top: 0;
-  z-index: 4;
-  background-color: color-mix(in srgb, var(--card) 94%, var(--foreground)) !important;
-  border-bottom: 1px solid var(--border) !important;
-}
-
-[data-title] {
-  cursor: pointer;
-  transition:
-    color 120ms ease,
-    text-decoration-color 120ms ease;
-  text-decoration: underline;
-  text-decoration-color: transparent;
-  text-underline-offset: 2px;
-}
-
-[data-title]:hover {
-  color: color-mix(in srgb, var(--foreground) 84%, var(--primary)) !important;
-  text-decoration-color: currentColor;
-}
-`;
+// -- Patch parsing ------------------------------------------------------------
 
 type RenderablePatch =
   | {
@@ -145,17 +99,18 @@ function getRenderablePatch(
   }
 }
 
-function resolveFileDiffPath(fileDiff: FileDiffMetadata): string {
-  const raw = fileDiff.name ?? fileDiff.prevName ?? "";
-  if (raw.startsWith("a/") || raw.startsWith("b/")) {
-    return raw.slice(2);
-  }
-  return raw;
+// -- Sorting helper -----------------------------------------------------------
+
+function sortFilesByPath(files: FileDiffMetadata[]): FileDiffMetadata[] {
+  return files.toSorted((left, right) =>
+    resolveFileDiffPath(left).localeCompare(resolveFileDiffPath(right), undefined, {
+      numeric: true,
+      sensitivity: "base",
+    }),
+  );
 }
 
-function buildFileDiffRenderKey(fileDiff: FileDiffMetadata): string {
-  return fileDiff.cacheKey ?? `${fileDiff.prevName ?? "none"}:${fileDiff.name}`;
-}
+// -- DiffPanel ----------------------------------------------------------------
 
 interface DiffPanelProps {
   mode?: DiffPanelMode;
@@ -169,6 +124,27 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
   const settings = useSettings();
   const [diffRenderMode, setDiffRenderMode] = useState<DiffRenderMode>("stacked");
   const [diffWordWrap, setDiffWordWrap] = useState(settings.diffWordWrap);
+  const [collapsedFiles, setCollapsedFiles] = useState<Set<string>>(new Set());
+  const toggleFileCollapsed = useCallback((fileKey: string) => {
+    setCollapsedFiles((prev) => {
+      const next = new Set(prev);
+      if (next.has(fileKey)) {
+        next.delete(fileKey);
+      } else {
+        next.add(fileKey);
+      }
+      return next;
+    });
+  }, []);
+  const collapseAllFiles = useCallback(
+    (files: FileDiffMetadata[]) => {
+      setCollapsedFiles(new Set(files.map((f) => `${buildFileDiffRenderKey(f)}:${resolvedTheme}`)));
+    },
+    [resolvedTheme],
+  );
+  const expandAllFiles = useCallback(() => {
+    setCollapsedFiles(new Set());
+  }, []);
   const patchViewportRef = useRef<HTMLDivElement>(null);
   const turnStripRef = useRef<HTMLDivElement>(null);
   const previousDiffOpenRef = useRef(false);
@@ -180,6 +156,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
   });
   const diffSearch = useSearch({ strict: false, select: (search) => parseDiffRouteSearch(search) });
   const diffOpen = diffSearch.diff === "1";
+  const reviewAnnotations = useReviewAnnotations(routeThreadId);
   const activeThreadId = routeThreadId;
   const activeThread = useStore((store) =>
     activeThreadId ? store.threads.find((thread) => thread.id === activeThreadId) : undefined,
@@ -189,8 +166,51 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
     activeProjectId ? store.projects.find((project) => project.id === activeProjectId) : undefined,
   );
   const activeCwd = activeThread?.worktreePath ?? activeProject?.cwd;
+
   const gitBranchesQuery = useQuery(gitBranchesQueryOptions(activeCwd ?? null));
   const isGitRepo = gitBranchesQuery.data?.isRepo ?? true;
+  const defaultBranchName = useMemo(() => {
+    const branches = gitBranchesQuery.data?.branches;
+    if (!branches) return null;
+    return branches.find((b) => b.isDefault)?.name ?? null;
+  }, [gitBranchesQuery.data?.branches]);
+  const showBranchDiff = diffSearch.diffBranch === "1";
+  const showStatusView = diffSearch.diffStatus === "1";
+  const effectiveShowBranchDiff = showBranchDiff;
+  const gitStatusQuery = useQuery(gitStatusQueryOptions(activeCwd ?? null));
+  const statusFiles = gitStatusQuery.data?.workingTree.files ?? [];
+  const workingTreeDiffQuery = useQuery(
+    gitDiffWorkingTreeQueryOptions(showStatusView ? (activeCwd ?? null) : null),
+  );
+  const workingTreePatch = useMemo(
+    () =>
+      showStatusView
+        ? getRenderablePatch(workingTreeDiffQuery.data?.diff, `working-tree:${resolvedTheme}`)
+        : null,
+    [showStatusView, workingTreeDiffQuery.data?.diff, resolvedTheme],
+  );
+  const workingTreeFiles = useMemo(
+    () => (workingTreePatch?.kind === "files" ? sortFilesByPath(workingTreePatch.files) : []),
+    [workingTreePatch],
+  );
+  const branchDiffQuery = useQuery(
+    gitDiffBranchQueryOptions({
+      cwd: activeCwd ?? null,
+      base: effectiveShowBranchDiff ? (defaultBranchName ?? "main") : null,
+    }),
+  );
+  const branchDiffPatch = useMemo(
+    () =>
+      effectiveShowBranchDiff
+        ? getRenderablePatch(branchDiffQuery.data?.diff, `branch-diff:${resolvedTheme}`)
+        : null,
+    [effectiveShowBranchDiff, branchDiffQuery.data?.diff, resolvedTheme],
+  );
+  const branchDiffFiles = useMemo(
+    () => (branchDiffPatch?.kind === "files" ? sortFilesByPath(branchDiffPatch.files) : []),
+    [branchDiffPatch],
+  );
+
   const { turnDiffSummaries, inferredCheckpointTurnCountByTurnId } =
     useTurnDiffSummaries(activeThread);
   const orderedTurnDiffSummaries = useMemo(
@@ -283,6 +303,38 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
         ? "Failed to load checkpoint diff."
         : null;
 
+  const worktreePath = activeThread?.worktreePath ?? null;
+  const isWorktreeMissing =
+    !!worktreePath &&
+    !!checkpointDiffError &&
+    (checkpointDiffError.includes("ENOENT") ||
+      checkpointDiffError.includes("NotFound") ||
+      checkpointDiffError.includes("no such file"));
+  const queryClient = useQueryClient();
+  const createWorktreeMutation = useMutation(gitCreateWorktreeMutationOptions({ queryClient }));
+  const handleRecreateWorktree = useCallback(() => {
+    if (!activeProject || !activeThread?.branch) return;
+    createWorktreeMutation.mutate(
+      {
+        cwd: activeProject.cwd,
+        branch: activeThread.branch,
+        newBranch: activeThread.branch,
+        path: worktreePath,
+      },
+      {
+        onSuccess: () => {
+          void activeCheckpointDiffQuery.refetch();
+        },
+      },
+    );
+  }, [
+    activeProject,
+    activeThread?.branch,
+    createWorktreeMutation,
+    worktreePath,
+    activeCheckpointDiffQuery,
+  ]);
+
   const selectedPatch = selectedTurn ? selectedTurnCheckpointDiff : conversationCheckpointDiff;
   const hasResolvedPatch = typeof selectedPatch === "string";
   const hasNoNetChanges = hasResolvedPatch && selectedPatch.trim().length === 0;
@@ -290,17 +342,26 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
     () => getRenderablePatch(selectedPatch, `diff-panel:${resolvedTheme}`),
     [resolvedTheme, selectedPatch],
   );
-  const renderableFiles = useMemo(() => {
-    if (!renderablePatch || renderablePatch.kind !== "files") {
-      return [];
-    }
-    return renderablePatch.files.toSorted((left, right) =>
-      resolveFileDiffPath(left).localeCompare(resolveFileDiffPath(right), undefined, {
-        numeric: true,
-        sensitivity: "base",
-      }),
+  const renderableFiles = useMemo(
+    () => (renderablePatch?.kind === "files" ? sortFilesByPath(renderablePatch.files) : []),
+    [renderablePatch],
+  );
+
+  const activeVisibleFiles = showStatusView
+    ? workingTreeFiles
+    : effectiveShowBranchDiff
+      ? branchDiffFiles
+      : renderableFiles;
+  const allFilesCollapsed =
+    activeVisibleFiles.length > 0 &&
+    activeVisibleFiles.every((f) =>
+      collapsedFiles.has(`${buildFileDiffRenderKey(f)}:${resolvedTheme}`),
     );
-  }, [renderablePatch]);
+
+  // Reset collapsed state when the diff selection changes
+  useEffect(() => {
+    setCollapsedFiles(new Set());
+  }, [renderableFiles]);
 
   useEffect(() => {
     if (diffOpen && !previousDiffOpenRef.current) {
@@ -414,9 +475,22 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
     selectedChip?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
   }, [selectedTurn?.turnId, selectedTurnId]);
 
+  // -- Shared props for every DiffFileList instance ---------------------------
+
+  const diffFileListSharedProps = {
+    resolvedTheme,
+    diffRenderMode,
+    collapsedFiles,
+    onToggleCollapsed: toggleFileCollapsed,
+    onOpenFile: openDiffFileInEditor,
+    patchViewportRef,
+    cwd: activeCwd ?? "",
+    ...(reviewAnnotations.length > 0 ? { annotations: reviewAnnotations } : {}),
+  } as const;
+
   const headerRow = (
     <>
-      <div className="relative min-w-0 flex-1 [-webkit-app-region:no-drag]">
+      <div className="relative w-full min-w-0 md:w-auto md:flex-1 [-webkit-app-region:no-drag]">
         {canScrollTurnStripLeft && (
           <div className="pointer-events-none absolute inset-y-0 left-8 z-10 w-7 bg-linear-to-r from-card to-transparent" />
         )}
@@ -460,12 +534,14 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
             type="button"
             className="shrink-0 rounded-md"
             onClick={selectWholeConversation}
-            data-turn-chip-selected={selectedTurnId === null}
+            data-turn-chip-selected={
+              selectedTurnId === null && !effectiveShowBranchDiff && !showStatusView
+            }
           >
             <div
               className={cn(
                 "rounded-md border px-2 py-1 text-left transition-colors",
-                selectedTurnId === null
+                selectedTurnId === null && !effectiveShowBranchDiff && !showStatusView
                   ? "border-border bg-accent text-accent-foreground"
                   : "border-border/70 bg-background/70 text-muted-foreground/80 hover:border-border hover:text-foreground/80",
               )}
@@ -506,9 +582,94 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
           ))}
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-1 [-webkit-app-region:no-drag]">
+      <button
+        type="button"
+        className={cn("shrink-0 rounded-md [-webkit-app-region:no-drag]")}
+        onClick={() => {
+          if (!activeThread) return;
+          void navigate({
+            to: "/$threadId",
+            params: { threadId: activeThread.id },
+            search: (previous) => {
+              const rest = stripDiffSearchParams(previous);
+              return {
+                ...rest,
+                diff: "1" as const,
+                ...(!showStatusView ? { diffStatus: "1" as const } : {}),
+              };
+            },
+          });
+        }}
+        title="Show uncommitted working tree changes"
+      >
+        <div
+          className={cn(
+            "flex items-center gap-1 rounded-md border px-2 py-1 transition-colors",
+            showStatusView
+              ? "border-border bg-accent text-accent-foreground"
+              : "border-border/70 bg-background/70 text-muted-foreground/80 hover:border-border hover:text-foreground/80",
+          )}
+        >
+          <ListTreeIcon className="size-2.5" />
+          <span className="text-[10px] leading-tight font-medium">
+            Working tree{statusFiles.length > 0 ? ` (${statusFiles.length})` : ""}
+          </span>
+        </div>
+      </button>
+      {defaultBranchName && (
+        <button
+          type="button"
+          className={cn("shrink-0 rounded-md [-webkit-app-region:no-drag]")}
+          onClick={() => {
+            if (!activeThread) return;
+            void navigate({
+              to: "/$threadId",
+              params: { threadId: activeThread.id },
+              search: (previous) => {
+                const rest = stripDiffSearchParams(previous);
+                return {
+                  ...rest,
+                  diff: "1" as const,
+                  ...(!effectiveShowBranchDiff ? { diffBranch: "1" as const } : {}),
+                };
+              },
+            });
+          }}
+          title={`Show full diff to ${defaultBranchName}`}
+        >
+          <div
+            className={cn(
+              "flex items-center gap-1 rounded-md border px-2 py-1 transition-colors",
+              effectiveShowBranchDiff
+                ? "border-border bg-accent text-accent-foreground"
+                : "border-border/70 bg-background/70 text-muted-foreground/80 hover:border-border hover:text-foreground/80",
+            )}
+          >
+            <GitBranchIcon className="size-2.5" />
+            <span className="text-[10px] leading-tight font-medium">
+              Diff to {defaultBranchName}
+            </span>
+          </div>
+        </button>
+      )}
+      <div className="ml-auto flex shrink-0 items-center gap-1 [-webkit-app-region:no-drag]">
+        {activeVisibleFiles.length > 0 && (
+          <button
+            type="button"
+            className="inline-flex size-6 items-center justify-center rounded-md border border-border/70 bg-background/70 text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+            onClick={() =>
+              allFilesCollapsed ? expandAllFiles() : collapseAllFiles(activeVisibleFiles)
+            }
+            title={allFilesCollapsed ? "Expand all files" : "Collapse all files"}
+          >
+            {allFilesCollapsed ? (
+              <ChevronsUpDownIcon className="size-3" />
+            ) : (
+              <ChevronsDownUpIcon className="size-3" />
+            )}
+          </button>
+        )}
         <ToggleGroup
-          className="shrink-0"
           variant="outline"
           size="xs"
           value={[diffRenderMode]}
@@ -552,95 +713,148 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
         <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-muted-foreground/70">
           Turn diffs are unavailable because this project is not a git repository.
         </div>
+      ) : isWorktreeMissing ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+          <FolderXIcon className="size-8 text-muted-foreground/40" />
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-foreground/80">Worktree not found</p>
+            <p className="text-xs text-muted-foreground/70">
+              The worktree for this thread was deleted. Recreate it to view diffs again.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={createWorktreeMutation.isPending || !activeThread?.branch}
+            onClick={handleRecreateWorktree}
+          >
+            {createWorktreeMutation.isPending ? (
+              <>
+                <LoaderIcon className="size-3.5 animate-spin" />
+                Recreating...
+              </>
+            ) : (
+              "Recreate Worktree"
+            )}
+          </Button>
+          {createWorktreeMutation.isError && (
+            <p className="text-[11px] text-destructive">
+              {createWorktreeMutation.error instanceof Error
+                ? createWorktreeMutation.error.message
+                : "Failed to recreate worktree."}
+            </p>
+          )}
+        </div>
+      ) : showStatusView ? (
+        workingTreeDiffQuery.isLoading ? (
+          <DiffPanelLoadingState label="Loading working tree diff..." />
+        ) : workingTreeDiffQuery.isError ? (
+          <div className="flex-1 px-3 pt-2">
+            <p className="text-[11px] text-red-500/80">
+              {workingTreeDiffQuery.error instanceof Error
+                ? workingTreeDiffQuery.error.message
+                : "Failed to load working tree diff."}
+            </p>
+          </div>
+        ) : !workingTreePatch ? (
+          <div className="flex flex-1 items-center justify-center px-3 py-2 text-xs text-muted-foreground/70">
+            <p>No uncommitted changes.</p>
+          </div>
+        ) : workingTreePatch.kind === "files" ? (
+          <DiffFileList
+            files={workingTreeFiles}
+            wordWrap={diffWordWrap}
+            {...diffFileListSharedProps}
+          />
+        ) : (
+          <div className="min-h-0 flex-1 overflow-auto p-2">
+            <div className="space-y-2">
+              <p className="text-[11px] text-muted-foreground/75">{workingTreePatch.reason}</p>
+              <pre className="overflow-auto rounded-md border border-border/70 bg-background/70 p-3 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-words text-muted-foreground/90">
+                {workingTreePatch.text}
+              </pre>
+            </div>
+          </div>
+        )
+      ) : effectiveShowBranchDiff ? (
+        branchDiffQuery.isLoading ? (
+          <div className="flex flex-1 items-center justify-center px-3 py-2 text-xs text-muted-foreground/70">
+            <p>Loading branch diff...</p>
+          </div>
+        ) : branchDiffQuery.isError ? (
+          <div className="flex-1 px-3 pt-2">
+            <p className="text-[11px] text-red-500/80">
+              {branchDiffQuery.error instanceof Error
+                ? branchDiffQuery.error.message
+                : "Failed to load branch diff."}
+            </p>
+          </div>
+        ) : !branchDiffPatch && reviewAnnotations.length === 0 ? (
+          <div className="flex flex-1 items-center justify-center px-3 py-2 text-xs text-muted-foreground/70">
+            <p>No changes compared to {defaultBranchName}.</p>
+          </div>
+        ) : !branchDiffPatch && reviewAnnotations.length > 0 ? (
+          <DiffFileList files={[]} wordWrap={diffWordWrap} {...diffFileListSharedProps} />
+        ) : branchDiffPatch?.kind === "files" ? (
+          <DiffFileList
+            files={branchDiffFiles}
+            wordWrap={diffWordWrap}
+            {...diffFileListSharedProps}
+          />
+        ) : (
+          <div className="min-h-0 flex-1 overflow-auto p-2">
+            <div className="space-y-2">
+              <p className="text-[11px] text-muted-foreground/75">{branchDiffPatch?.reason}</p>
+              <pre className="overflow-auto rounded-md border border-border/70 bg-background/70 p-3 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-words text-muted-foreground/90">
+                {branchDiffPatch?.text}
+              </pre>
+            </div>
+          </div>
+        )
       ) : orderedTurnDiffSummaries.length === 0 ? (
         <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-muted-foreground/70">
           No completed turns yet.
         </div>
-      ) : (
-        <>
-          <div
-            ref={patchViewportRef}
-            className="diff-panel-viewport min-h-0 min-w-0 flex-1 overflow-hidden"
-          >
-            {checkpointDiffError && !renderablePatch && (
-              <div className="px-3">
-                <p className="mb-2 text-[11px] text-red-500/80">{checkpointDiffError}</p>
-              </div>
-            )}
-            {!renderablePatch ? (
-              isLoadingCheckpointDiff ? (
-                <DiffPanelLoadingState label="Loading checkpoint diff..." />
-              ) : (
-                <div className="flex h-full items-center justify-center px-3 py-2 text-xs text-muted-foreground/70">
-                  <p>
-                    {hasNoNetChanges
-                      ? "No net changes in this selection."
-                      : "No patch available for this selection."}
-                  </p>
-                </div>
-              )
-            ) : renderablePatch.kind === "files" ? (
-              <Virtualizer
-                className="diff-render-surface h-full min-h-0 overflow-auto px-2 pb-2"
-                config={{
-                  overscrollSize: 600,
-                  intersectionObserverMargin: 1200,
-                }}
-              >
-                {renderableFiles.map((fileDiff) => {
-                  const filePath = resolveFileDiffPath(fileDiff);
-                  const fileKey = buildFileDiffRenderKey(fileDiff);
-                  const themedFileKey = `${fileKey}:${resolvedTheme}`;
-                  return (
-                    <div
-                      key={themedFileKey}
-                      data-diff-file-path={filePath}
-                      className="diff-render-file mb-2 rounded-md first:mt-2 last:mb-0"
-                      onClickCapture={(event) => {
-                        const nativeEvent = event.nativeEvent as MouseEvent;
-                        const composedPath = nativeEvent.composedPath?.() ?? [];
-                        const clickedHeader = composedPath.some((node) => {
-                          if (!(node instanceof Element)) return false;
-                          return node.hasAttribute("data-title");
-                        });
-                        if (!clickedHeader) return;
-                        openDiffFileInEditor(filePath);
-                      }}
-                    >
-                      <FileDiff
-                        fileDiff={fileDiff}
-                        options={{
-                          diffStyle: diffRenderMode === "split" ? "split" : "unified",
-                          lineDiffType: "none",
-                          overflow: diffWordWrap ? "wrap" : "scroll",
-                          theme: resolveDiffThemeName(resolvedTheme),
-                          themeType: resolvedTheme as DiffThemeType,
-                          unsafeCSS: DIFF_PANEL_UNSAFE_CSS,
-                        }}
-                      />
-                    </div>
-                  );
-                })}
-              </Virtualizer>
-            ) : (
-              <div className="h-full overflow-auto p-2">
-                <div className="space-y-2">
-                  <p className="text-[11px] text-muted-foreground/75">{renderablePatch.reason}</p>
-                  <pre
-                    className={cn(
-                      "max-h-[72vh] rounded-md border border-border/70 bg-background/70 p-3 font-mono text-[11px] leading-relaxed text-muted-foreground/90",
-                      diffWordWrap
-                        ? "overflow-auto whitespace-pre-wrap wrap-break-word"
-                        : "overflow-auto",
-                    )}
-                  >
-                    {renderablePatch.text}
-                  </pre>
-                </div>
-              </div>
-            )}
+      ) : checkpointDiffError && !renderablePatch ? (
+        <div className="px-3 pt-2">
+          <p className="text-[11px] text-red-500/80">{checkpointDiffError}</p>
+        </div>
+      ) : !renderablePatch ? (
+        isLoadingCheckpointDiff ? (
+          <DiffPanelLoadingState label="Loading checkpoint diff..." />
+        ) : reviewAnnotations.length > 0 ? (
+          <DiffFileList files={[]} wordWrap={diffWordWrap} {...diffFileListSharedProps} />
+        ) : (
+          <div className="flex flex-1 items-center justify-center px-3 py-2 text-xs text-muted-foreground/70">
+            <p>
+              {hasNoNetChanges
+                ? "No net changes in this selection."
+                : "No patch available for this selection."}
+            </p>
           </div>
-        </>
+        )
+      ) : renderablePatch.kind === "files" ? (
+        <DiffFileList
+          files={renderableFiles}
+          wordWrap={diffWordWrap}
+          {...diffFileListSharedProps}
+        />
+      ) : (
+        <div className="h-full overflow-auto p-2">
+          <div className="space-y-2">
+            <p className="text-[11px] text-muted-foreground/75">{renderablePatch.reason}</p>
+            <pre
+              className={cn(
+                "max-h-[72vh] rounded-md border border-border/70 bg-background/70 p-3 font-mono text-[11px] leading-relaxed text-muted-foreground/90",
+                diffWordWrap
+                  ? "overflow-auto whitespace-pre-wrap wrap-break-word"
+                  : "overflow-auto",
+              )}
+            >
+              {renderablePatch.text}
+            </pre>
+          </div>
+        </div>
       )}
     </DiffPanelShell>
   );

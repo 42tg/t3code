@@ -738,7 +738,7 @@ export default function GitActionsControl({ gitCwd, activeThreadId }: GitActions
       setIsEditingFiles(false);
       setIsCommitDialogOpen(true);
     },
-    [openExistingPr, pullMutation, runGitActionWithToast, setIsCommitDialogOpen],
+    [openExistingPr, pullMutation, setIsCommitDialogOpen],
   );
 
   const runDialogAction = useCallback(() => {

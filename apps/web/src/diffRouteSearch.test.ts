@@ -71,4 +71,38 @@ describe("parseDiffRouteSearch", () => {
       diff: "1",
     });
   });
+
+  it("parses diffBranch toggle", () => {
+    const parsed = parseDiffRouteSearch({
+      diff: "1",
+      diffBranch: "1",
+    });
+
+    expect(parsed).toEqual({
+      diff: "1",
+      diffBranch: "1",
+    });
+  });
+
+  it("parses diffStatus toggle", () => {
+    const parsed = parseDiffRouteSearch({
+      diff: "1",
+      diffStatus: "1",
+    });
+
+    expect(parsed).toEqual({
+      diff: "1",
+      diffStatus: "1",
+    });
+  });
+
+  it("drops diffBranch and diffStatus when diff is closed", () => {
+    const parsed = parseDiffRouteSearch({
+      diff: "0",
+      diffBranch: "1",
+      diffStatus: "1",
+    });
+
+    expect(parsed).toEqual({});
+  });
 });

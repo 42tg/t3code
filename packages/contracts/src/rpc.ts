@@ -24,6 +24,9 @@ import {
   GitRunStackedActionInput,
   GitStatusInput,
   GitStatusResult,
+  GitDiffBranchInput,
+  GitDiffBranchResult,
+  GitDiffWorkingTreeInput,
 } from "./git";
 import { KeybindingsConfigError } from "./keybindings";
 import {
@@ -48,7 +51,30 @@ import {
   ProjectWriteFileError,
   ProjectWriteFileInput,
   ProjectWriteFileResult,
+  ProjectReadFileInput,
+  ProjectReadFileResult,
 } from "./project";
+import {
+  ReviewCommentAddInput,
+  ReviewCommentAddResult,
+  ReviewCommentUpdateInput,
+  ReviewCommentDeleteInput,
+  ReviewCommentListInput,
+  ReviewCommentListResult,
+  ReviewCommentPublishInput,
+  ReviewCommentPublishResult,
+  ReviewCommentError,
+} from "./reviewComment";
+import {
+  ReviewRequestUpsertInput,
+  ReviewRequestUpsertResult,
+  ReviewRequestListInput,
+  ReviewRequestListResult,
+  ReviewRequestDismissInput,
+  ReviewRequestLinkThreadInput,
+  ReviewRequestSubmitInput,
+  ReviewRequestError,
+} from "./reviewRequest";
 import {
   TerminalClearInput,
   TerminalCloseInput,
@@ -77,6 +103,8 @@ export const WS_METHODS = {
   projectsRemove: "projects.remove",
   projectsSearchEntries: "projects.searchEntries",
   projectsWriteFile: "projects.writeFile",
+  projectsReadFile: "projects.readFile",
+  projectsResolveFromWorkspace: "projects.resolveFromWorkspace",
 
   // Shell methods
   shellOpenInEditor: "shell.openInEditor",
@@ -84,6 +112,8 @@ export const WS_METHODS = {
   // Git methods
   gitPull: "git.pull",
   gitStatus: "git.status",
+  gitDiffBranch: "git.diffBranch",
+  gitDiffWorkingTree: "git.diffWorkingTree",
   gitRunStackedAction: "git.runStackedAction",
   gitListBranches: "git.listBranches",
   gitCreateWorktree: "git.createWorktree",
@@ -101,6 +131,21 @@ export const WS_METHODS = {
   terminalClear: "terminal.clear",
   terminalRestart: "terminal.restart",
   terminalClose: "terminal.close",
+
+  // Review comment methods
+  reviewCommentAdd: "reviewComment.add",
+  reviewCommentUpdate: "reviewComment.update",
+  reviewCommentDelete: "reviewComment.delete",
+  reviewCommentList: "reviewComment.list",
+  reviewCommentPublish: "reviewComment.publish",
+
+  // Review request methods
+  reviewRequestUpsert: "reviewRequest.upsert",
+  reviewRequestList: "reviewRequest.list",
+  reviewRequestDismiss: "reviewRequest.dismiss",
+  reviewRequestReopen: "reviewRequest.reopen",
+  reviewRequestLinkThread: "reviewRequest.linkThread",
+  reviewRequestSubmit: "reviewRequest.submit",
 
   // Server meta
   serverGetConfig: "server.getConfig",
@@ -225,6 +270,93 @@ export const WsGitInitRpc = Rpc.make(WS_METHODS.gitInit, {
   error: GitCommandError,
 });
 
+export const WsGitDiffBranchRpc = Rpc.make(WS_METHODS.gitDiffBranch, {
+  payload: GitDiffBranchInput,
+  success: GitDiffBranchResult,
+  error: GitCommandError,
+});
+
+export const WsGitDiffWorkingTreeRpc = Rpc.make(WS_METHODS.gitDiffWorkingTree, {
+  payload: GitDiffWorkingTreeInput,
+  success: GitDiffBranchResult,
+  error: GitCommandError,
+});
+
+export const WsProjectsReadFileRpc = Rpc.make(WS_METHODS.projectsReadFile, {
+  payload: ProjectReadFileInput,
+  success: ProjectReadFileResult,
+  error: ProjectWriteFileError,
+});
+
+export const WsProjectsResolveFromWorkspaceRpc = Rpc.make(WS_METHODS.projectsResolveFromWorkspace, {
+  payload: Schema.Struct({
+    repository: Schema.String,
+    workspaceRoots: Schema.Array(Schema.String),
+  }),
+  success: Schema.Struct({ cwd: Schema.NullOr(Schema.String) }),
+  error: ProjectWriteFileError,
+});
+
+export const WsReviewCommentAddRpc = Rpc.make(WS_METHODS.reviewCommentAdd, {
+  payload: ReviewCommentAddInput,
+  success: ReviewCommentAddResult,
+  error: ReviewCommentError,
+});
+
+export const WsReviewCommentUpdateRpc = Rpc.make(WS_METHODS.reviewCommentUpdate, {
+  payload: ReviewCommentUpdateInput,
+  error: ReviewCommentError,
+});
+
+export const WsReviewCommentDeleteRpc = Rpc.make(WS_METHODS.reviewCommentDelete, {
+  payload: ReviewCommentDeleteInput,
+  error: ReviewCommentError,
+});
+
+export const WsReviewCommentListRpc = Rpc.make(WS_METHODS.reviewCommentList, {
+  payload: ReviewCommentListInput,
+  success: ReviewCommentListResult,
+  error: ReviewCommentError,
+});
+
+export const WsReviewCommentPublishRpc = Rpc.make(WS_METHODS.reviewCommentPublish, {
+  payload: ReviewCommentPublishInput,
+  success: ReviewCommentPublishResult,
+  error: ReviewCommentError,
+});
+
+export const WsReviewRequestUpsertRpc = Rpc.make(WS_METHODS.reviewRequestUpsert, {
+  payload: ReviewRequestUpsertInput,
+  success: ReviewRequestUpsertResult,
+  error: ReviewRequestError,
+});
+
+export const WsReviewRequestListRpc = Rpc.make(WS_METHODS.reviewRequestList, {
+  payload: ReviewRequestListInput,
+  success: ReviewRequestListResult,
+  error: ReviewRequestError,
+});
+
+export const WsReviewRequestDismissRpc = Rpc.make(WS_METHODS.reviewRequestDismiss, {
+  payload: ReviewRequestDismissInput,
+  error: ReviewRequestError,
+});
+
+export const WsReviewRequestReopenRpc = Rpc.make(WS_METHODS.reviewRequestReopen, {
+  payload: ReviewRequestDismissInput,
+  error: ReviewRequestError,
+});
+
+export const WsReviewRequestLinkThreadRpc = Rpc.make(WS_METHODS.reviewRequestLinkThread, {
+  payload: ReviewRequestLinkThreadInput,
+  error: ReviewRequestError,
+});
+
+export const WsReviewRequestSubmitRpc = Rpc.make(WS_METHODS.reviewRequestSubmit, {
+  payload: ReviewRequestSubmitInput,
+  error: ReviewRequestError,
+});
+
 export const WsTerminalOpenRpc = Rpc.make(WS_METHODS.terminalOpen, {
   payload: TerminalOpenInput,
   success: TerminalSessionSnapshot,
@@ -329,9 +461,13 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerUpdateSettingsRpc,
   WsProjectsSearchEntriesRpc,
   WsProjectsWriteFileRpc,
+  WsProjectsReadFileRpc,
+  WsProjectsResolveFromWorkspaceRpc,
   WsShellOpenInEditorRpc,
   WsGitStatusRpc,
   WsGitPullRpc,
+  WsGitDiffBranchRpc,
+  WsGitDiffWorkingTreeRpc,
   WsGitRunStackedActionRpc,
   WsGitResolvePullRequestRpc,
   WsGitPreparePullRequestThreadRpc,
@@ -356,4 +492,15 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationGetTurnDiffRpc,
   WsOrchestrationGetFullThreadDiffRpc,
   WsOrchestrationReplayEventsRpc,
+  WsReviewCommentAddRpc,
+  WsReviewCommentUpdateRpc,
+  WsReviewCommentDeleteRpc,
+  WsReviewCommentListRpc,
+  WsReviewCommentPublishRpc,
+  WsReviewRequestUpsertRpc,
+  WsReviewRequestListRpc,
+  WsReviewRequestDismissRpc,
+  WsReviewRequestReopenRpc,
+  WsReviewRequestLinkThreadRpc,
+  WsReviewRequestSubmitRpc,
 );

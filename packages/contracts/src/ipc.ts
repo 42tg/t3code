@@ -1,6 +1,9 @@
 import type {
   GitCheckoutInput,
   GitCreateBranchInput,
+  GitDiffBranchInput,
+  GitDiffBranchResult,
+  GitDiffWorkingTreeInput,
   GitPreparePullRequestThreadInput,
   GitPreparePullRequestThreadResult,
   GitPullRequestRefInput,
@@ -49,6 +52,25 @@ import type {
 } from "./orchestration";
 import { EditorId } from "./editor";
 import { ServerSettings, ServerSettingsPatch } from "./settings";
+import type {
+  ReviewCommentAddInput,
+  ReviewCommentAddResult,
+  ReviewCommentUpdateInput,
+  ReviewCommentDeleteInput,
+  ReviewCommentListInput,
+  ReviewCommentListResult,
+  ReviewCommentPublishInput,
+  ReviewCommentPublishResult,
+} from "./reviewComment";
+import type {
+  ReviewRequest,
+  ReviewRequestUpsertInput,
+  ReviewRequestListInput,
+  ReviewRequestListResult,
+  ReviewRequestDismissInput,
+  ReviewRequestLinkThreadInput,
+  ReviewRequestSubmitInput,
+} from "./reviewRequest";
 
 export interface ContextMenuItem<T extends string = string> {
   id: T;
@@ -138,6 +160,11 @@ export interface NativeApi {
   projects: {
     searchEntries: (input: ProjectSearchEntriesInput) => Promise<ProjectSearchEntriesResult>;
     writeFile: (input: ProjectWriteFileInput) => Promise<ProjectWriteFileResult>;
+    readFile: (input: { cwd: string; relativePath: string }) => Promise<{ content: string }>;
+    resolveFromWorkspace: (input: {
+      repository: string;
+      workspaceRoots: readonly string[];
+    }) => Promise<{ cwd: string; cloned: boolean }>;
   };
   shell: {
     openInEditor: (cwd: string, editor: EditorId) => Promise<void>;
@@ -155,9 +182,27 @@ export interface NativeApi {
     preparePullRequestThread: (
       input: GitPreparePullRequestThreadInput,
     ) => Promise<GitPreparePullRequestThreadResult>;
+    // Diff API
+    diffBranch: (input: GitDiffBranchInput) => Promise<GitDiffBranchResult>;
+    diffWorkingTree: (input: GitDiffWorkingTreeInput) => Promise<GitDiffBranchResult>;
     // Stacked action API
     pull: (input: GitPullInput) => Promise<GitPullResult>;
     status: (input: GitStatusInput) => Promise<GitStatusResult>;
+  };
+  reviewComment: {
+    add: (input: ReviewCommentAddInput) => Promise<ReviewCommentAddResult>;
+    update: (input: ReviewCommentUpdateInput) => Promise<void>;
+    delete: (input: ReviewCommentDeleteInput) => Promise<void>;
+    list: (input: ReviewCommentListInput) => Promise<ReviewCommentListResult>;
+    publish: (input: ReviewCommentPublishInput) => Promise<ReviewCommentPublishResult>;
+  };
+  reviewRequest: {
+    upsert: (input: ReviewRequestUpsertInput) => Promise<ReviewRequest>;
+    list: (input: ReviewRequestListInput) => Promise<ReviewRequestListResult>;
+    dismiss: (input: ReviewRequestDismissInput) => Promise<void>;
+    reopen: (input: ReviewRequestDismissInput) => Promise<void>;
+    linkThread: (input: ReviewRequestLinkThreadInput) => Promise<void>;
+    submit: (input: ReviewRequestSubmitInput) => Promise<void>;
   };
   contextMenu: {
     show: <T extends string>(

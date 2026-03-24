@@ -186,6 +186,12 @@ export function buildLegacyServerSettingsMigrationPatch(legacySettings: Record<s
     );
   }
 
+  if (Array.isArray(legacySettings.workspaceRoots)) {
+    patch.workspaceRoots = legacySettings.workspaceRoots.filter(
+      (item: unknown): item is string => typeof item === "string",
+    );
+  }
+
   return patch;
 }
 

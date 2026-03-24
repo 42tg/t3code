@@ -101,6 +101,22 @@ export const GitStatusInput = Schema.Struct({
 });
 export type GitStatusInput = typeof GitStatusInput.Type;
 
+export const GitDiffBranchInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+  base: TrimmedNonEmptyStringSchema,
+});
+export type GitDiffBranchInput = typeof GitDiffBranchInput.Type;
+
+export const GitDiffBranchResult = Schema.Struct({
+  diff: Schema.String,
+});
+export type GitDiffBranchResult = typeof GitDiffBranchResult.Type;
+
+export const GitDiffWorkingTreeInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+});
+export type GitDiffWorkingTreeInput = typeof GitDiffWorkingTreeInput.Type;
+
 export const GitPullInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,
 });

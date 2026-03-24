@@ -83,6 +83,8 @@ export const ServerSettings = Schema.Struct({
     })),
   ),
 
+  workspaceRoots: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(() => [])),
+
   // Provider specific settings
   providers: Schema.Struct({
     codex: CodexSettings.pipe(Schema.withDecodingDefault(() => ({}))),
@@ -158,6 +160,7 @@ export const ServerSettingsPatch = Schema.Struct({
   enableAssistantStreaming: Schema.optionalKey(Schema.Boolean),
   defaultThreadEnvMode: Schema.optionalKey(ThreadEnvMode),
   textGenerationModelSelection: Schema.optionalKey(ModelSelectionPatch),
+  workspaceRoots: Schema.optionalKey(Schema.Array(Schema.String)),
   providers: Schema.optionalKey(
     Schema.Struct({
       codex: Schema.optionalKey(CodexSettingsPatch),

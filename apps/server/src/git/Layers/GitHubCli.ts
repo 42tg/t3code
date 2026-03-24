@@ -143,10 +143,30 @@ function normalizeRepositoryCloneUrls(
   };
 }
 
+const RawGitHubReviewRequestSchema = Schema.Struct({
+  number: PositiveInt,
+  title: TrimmedNonEmptyString,
+  url: TrimmedNonEmptyString,
+  updatedAt: Schema.String,
+  body: Schema.String,
+  labels: Schema.Array(Schema.Struct({ name: Schema.String })),
+  repository: Schema.Struct({
+    name: Schema.String,
+    nameWithOwner: Schema.String,
+  }),
+  author: Schema.Struct({
+    login: Schema.String,
+  }),
+});
+
 function decodeGitHubJson<S extends Schema.Top>(
   raw: string,
   schema: S,
-  operation: "listOpenPullRequests" | "getPullRequest" | "getRepositoryCloneUrls",
+  operation:
+    | "listOpenPullRequests"
+    | "getPullRequest"
+    | "getRepositoryCloneUrls"
+    | "listReviewRequests",
   invalidDetail: string,
 ): Effect.Effect<S["Type"], GitHubCliError, S["DecodingServices"]> {
   return Schema.decodeEffect(Schema.fromJsonString(schema))(raw).pipe(
@@ -267,6 +287,33 @@ const makeGitHubCli = Effect.sync(() => {
           const trimmed = value.stdout.trim();
           return trimmed.length > 0 ? trimmed : null;
         }),
+      ),
+    listReviewRequests: (input) =>
+      execute({
+        cwd: process.cwd(),
+        args: [
+          "search",
+          "prs",
+          "--review-requested=@me",
+          "--state",
+          "open",
+          "--limit",
+          String(input.limit ?? 30),
+          "--json",
+          "number,title,url,repository,author,updatedAt,body,labels",
+        ],
+      }).pipe(
+        Effect.map((result) => result.stdout.trim()),
+        Effect.flatMap((raw) =>
+          raw.length === 0
+            ? Effect.succeed([] as (typeof RawGitHubReviewRequestSchema.Type)[])
+            : decodeGitHubJson(
+                raw,
+                Schema.Array(RawGitHubReviewRequestSchema),
+                "listReviewRequests",
+                "GitHub CLI returned invalid review request JSON.",
+              ),
+        ),
       ),
     checkoutPullRequest: (input) =>
       execute({

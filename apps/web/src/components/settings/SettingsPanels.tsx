@@ -1370,6 +1370,48 @@ export function GeneralSettingsPanel() {
         })}
       </SettingsSection>
 
+      <SettingsSection title="Workspace">
+        <SettingsRow
+          title="Workspace roots"
+          description="Directories where your repositories live. Used to auto-discover or clone repos for PR reviews."
+          resetAction={
+            settings.workspaceRoots.length > 0 ? (
+              <SettingResetButton
+                label="workspace roots"
+                onClick={() => updateSettings({ workspaceRoots: [] })}
+              />
+            ) : null
+          }
+          control={
+            settings.workspaceRoots.length > 0 ? (
+              <span className="text-xs text-muted-foreground">
+                {settings.workspaceRoots.length} path
+                {settings.workspaceRoots.length > 1 ? "s" : ""}
+              </span>
+            ) : null
+          }
+        >
+          <div className="flex flex-col gap-2">
+            <textarea
+              className="h-20 w-full rounded-md border bg-muted/50 px-3 py-2 font-mono text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring"
+              placeholder={"~/dev\n~/projects"}
+              value={settings.workspaceRoots.join("\n")}
+              onChange={(event) => {
+                const paths = event.target.value
+                  .split("\n")
+                  .map((s) => s.trim())
+                  .filter((s) => s.length > 0);
+                updateSettings({ workspaceRoots: paths });
+              }}
+            />
+            <p className="text-xs text-muted-foreground/60">
+              One directory per line. When reviewing a PR from an unknown repo, T3 Code will look
+              here for an existing clone or run <code>gh repo clone</code>.
+            </p>
+          </div>
+        </SettingsRow>
+      </SettingsSection>
+
       <SettingsSection title="Advanced">
         <SettingsRow
           title="Keybindings"

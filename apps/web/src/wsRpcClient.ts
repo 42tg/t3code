@@ -49,6 +49,8 @@ export interface WsRpcClient {
   readonly projects: {
     readonly searchEntries: RpcUnaryMethod<typeof WS_METHODS.projectsSearchEntries>;
     readonly writeFile: RpcUnaryMethod<typeof WS_METHODS.projectsWriteFile>;
+    readonly readFile: RpcUnaryMethod<typeof WS_METHODS.projectsReadFile>;
+    readonly resolveFromWorkspace: RpcUnaryMethod<typeof WS_METHODS.projectsResolveFromWorkspace>;
   };
   readonly shell: {
     readonly openInEditor: (input: {
@@ -59,6 +61,8 @@ export interface WsRpcClient {
   readonly git: {
     readonly pull: RpcUnaryMethod<typeof WS_METHODS.gitPull>;
     readonly status: RpcUnaryMethod<typeof WS_METHODS.gitStatus>;
+    readonly diffBranch: RpcUnaryMethod<typeof WS_METHODS.gitDiffBranch>;
+    readonly diffWorkingTree: RpcUnaryMethod<typeof WS_METHODS.gitDiffWorkingTree>;
     readonly runStackedAction: (
       input: GitRunStackedActionInput,
       options?: GitRunStackedActionOptions,
@@ -73,6 +77,22 @@ export interface WsRpcClient {
     readonly preparePullRequestThread: RpcUnaryMethod<
       typeof WS_METHODS.gitPreparePullRequestThread
     >;
+    readonly onActionProgress: (listener: (event: GitActionProgressEvent) => void) => () => void;
+  };
+  readonly reviewComment: {
+    readonly add: RpcUnaryMethod<typeof WS_METHODS.reviewCommentAdd>;
+    readonly update: RpcUnaryMethod<typeof WS_METHODS.reviewCommentUpdate>;
+    readonly delete: RpcUnaryMethod<typeof WS_METHODS.reviewCommentDelete>;
+    readonly list: RpcUnaryMethod<typeof WS_METHODS.reviewCommentList>;
+    readonly publish: RpcUnaryMethod<typeof WS_METHODS.reviewCommentPublish>;
+  };
+  readonly reviewRequest: {
+    readonly upsert: RpcUnaryMethod<typeof WS_METHODS.reviewRequestUpsert>;
+    readonly list: RpcUnaryNoArgMethod<typeof WS_METHODS.reviewRequestList>;
+    readonly dismiss: RpcUnaryMethod<typeof WS_METHODS.reviewRequestDismiss>;
+    readonly reopen: RpcUnaryMethod<typeof WS_METHODS.reviewRequestReopen>;
+    readonly linkThread: RpcUnaryMethod<typeof WS_METHODS.reviewRequestLinkThread>;
+    readonly submit: RpcUnaryMethod<typeof WS_METHODS.reviewRequestSubmit>;
   };
   readonly server: {
     readonly getConfig: RpcUnaryNoArgMethod<typeof WS_METHODS.serverGetConfig>;
@@ -128,6 +148,10 @@ export function createWsRpcClient(transport = new WsTransport()): WsRpcClient {
         transport.request((client) => client[WS_METHODS.projectsSearchEntries](input)),
       writeFile: (input) =>
         transport.request((client) => client[WS_METHODS.projectsWriteFile](input)),
+      readFile: (input) =>
+        transport.request((client) => client[WS_METHODS.projectsReadFile](input)),
+      resolveFromWorkspace: (input) =>
+        transport.request((client) => client[WS_METHODS.projectsResolveFromWorkspace](input)),
     },
     shell: {
       openInEditor: (input) =>
@@ -136,6 +160,9 @@ export function createWsRpcClient(transport = new WsTransport()): WsRpcClient {
     git: {
       pull: (input) => transport.request((client) => client[WS_METHODS.gitPull](input)),
       status: (input) => transport.request((client) => client[WS_METHODS.gitStatus](input)),
+      diffBranch: (input) => transport.request((client) => client[WS_METHODS.gitDiffBranch](input)),
+      diffWorkingTree: (input) =>
+        transport.request((client) => client[WS_METHODS.gitDiffWorkingTree](input)),
       runStackedAction: async (input, options) => {
         let result: GitRunStackedActionResult | null = null;
 
@@ -169,6 +196,34 @@ export function createWsRpcClient(transport = new WsTransport()): WsRpcClient {
         transport.request((client) => client[WS_METHODS.gitResolvePullRequest](input)),
       preparePullRequestThread: (input) =>
         transport.request((client) => client[WS_METHODS.gitPreparePullRequestThread](input)),
+      onActionProgress: (listener) =>
+        transport.subscribe(
+          (client) => client[WS_METHODS.gitRunStackedAction]({} as never),
+          listener,
+        ),
+    },
+    reviewComment: {
+      add: (input) => transport.request((client) => client[WS_METHODS.reviewCommentAdd](input)),
+      update: (input) =>
+        transport.request((client) => client[WS_METHODS.reviewCommentUpdate](input)),
+      delete: (input) =>
+        transport.request((client) => client[WS_METHODS.reviewCommentDelete](input)),
+      list: (input) => transport.request((client) => client[WS_METHODS.reviewCommentList](input)),
+      publish: (input) =>
+        transport.request((client) => client[WS_METHODS.reviewCommentPublish](input)),
+    },
+    reviewRequest: {
+      upsert: (input) =>
+        transport.request((client) => client[WS_METHODS.reviewRequestUpsert](input)),
+      list: () => transport.request((client) => client[WS_METHODS.reviewRequestList]({})),
+      dismiss: (input) =>
+        transport.request((client) => client[WS_METHODS.reviewRequestDismiss](input)),
+      reopen: (input) =>
+        transport.request((client) => client[WS_METHODS.reviewRequestReopen](input)),
+      linkThread: (input) =>
+        transport.request((client) => client[WS_METHODS.reviewRequestLinkThread](input)),
+      submit: (input) =>
+        transport.request((client) => client[WS_METHODS.reviewRequestSubmit](input)),
     },
     server: {
       getConfig: () => transport.request((client) => client[WS_METHODS.serverGetConfig]({})),

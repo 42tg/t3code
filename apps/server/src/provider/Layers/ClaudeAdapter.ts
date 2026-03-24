@@ -64,6 +64,8 @@ import {
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import { resolveEnabledPlugins } from "@t3tools/shared/claude-plugins";
+import { ReviewCommentRepository } from "../../persistence/Services/ReviewCommentRepository.ts";
+import { createReviewCommentMcpServer } from "../reviewCommentTools.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { getClaudeModelCapabilities } from "./ClaudeProvider.ts";
 import {
@@ -945,6 +947,7 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
 ) {
   const fileSystem = yield* FileSystem.FileSystem;
   const serverConfig = yield* ServerConfig;
+  const reviewCommentRepo = yield* ReviewCommentRepository;
   const nativeEventLogger =
     options?.nativeEventLogger ??
     (options?.nativeEventLogPath !== undefined
@@ -2751,6 +2754,9 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         env: process.env,
         ...(input.cwd ? { additionalDirectories: [input.cwd] } : {}),
         ...(sdkPlugins.length > 0 ? { plugins: sdkPlugins } : {}),
+        mcpServers: {
+          "review-comments": createReviewCommentMcpServer(threadId, reviewCommentRepo, input.cwd),
+        },
       };
 
       const queryRuntime = yield* Effect.try({
@@ -2805,6 +2811,7 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         lastAssistantUuid: resumeState?.resumeSessionAt,
         lastThreadStartedId: undefined,
         stopped: false,
+        interactionMode: "default",
       };
       yield* Ref.set(contextRef, context);
       sessions.set(threadId, context);

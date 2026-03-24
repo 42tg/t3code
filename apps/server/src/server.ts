@@ -24,6 +24,8 @@ import { CheckpointDiffQueryLive } from "./checkpointing/Layers/CheckpointDiffQu
 import { OrchestrationProjectionSnapshotQueryLive } from "./orchestration/Layers/ProjectionSnapshotQuery";
 import { CheckpointStoreLive } from "./checkpointing/Layers/CheckpointStore";
 import { GitCoreLive } from "./git/Layers/GitCore";
+import { ReviewCommentRepositoryLive } from "./persistence/Layers/ReviewCommentRepository";
+import { ReviewRequestRepositoryLive } from "./persistence/Layers/ReviewRequestRepository";
 import { GitHubCliLive } from "./git/Layers/GitHubCli";
 import { RoutingTextGenerationLive } from "./git/Layers/RoutingTextGeneration";
 import { TerminalManagerLive } from "./terminal/Layers/Manager";
@@ -188,6 +190,11 @@ const RuntimeServicesLive = Layer.empty.pipe(
   Layer.provideMerge(GitLayerLive),
   Layer.provideMerge(TerminalLayerLive),
   Layer.provideMerge(PersistenceLayerLive),
+  Layer.provideMerge(
+    Layer.mergeAll(ReviewCommentRepositoryLive, ReviewRequestRepositoryLive).pipe(
+      Layer.provide(SqlitePersistenceLayerLive),
+    ),
+  ),
   Layer.provideMerge(KeybindingsLive),
   Layer.provideMerge(ProviderRegistryLive),
   Layer.provideMerge(ServerSettingsLive),
