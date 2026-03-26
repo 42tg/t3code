@@ -180,6 +180,16 @@ export function createWsNativeApi(): NativeApi {
       linkThread: (input) => transport.request(WS_METHODS.reviewRequestLinkThread, input),
       submit: (input) => transport.request(WS_METHODS.reviewRequestSubmit, input),
     },
+    memory: {
+      list: (input) => transport.request(WS_METHODS.memoryList, input),
+      search: (input) => transport.request(WS_METHODS.memorySearch, input),
+      create: (input) => transport.request(WS_METHODS.memoryCreate, input),
+      update: (input) => transport.request(WS_METHODS.memoryUpdate, input),
+      archive: (input) => transport.request(WS_METHODS.memoryArchive, input),
+      delete: (input) => transport.request(WS_METHODS.memoryDelete, input),
+      getForThread: (input) => transport.request(WS_METHODS.memoryGetForThread, input),
+      extract: (input) => transport.request(WS_METHODS.memoryExtract, input),
+    },
     contextMenu: {
       show: async <T extends string>(
         items: readonly ContextMenuItem<T>[],

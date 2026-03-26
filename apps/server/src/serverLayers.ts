@@ -39,6 +39,9 @@ import { JiraManagerLive } from "./jira/Layers/JiraManager";
 import { ReviewCommentRepositoryLive } from "./persistence/Layers/ReviewCommentRepository";
 import { ReviewCommentRepository } from "./persistence/Services/ReviewCommentRepository";
 import { ReviewRequestRepositoryLive } from "./persistence/Layers/ReviewRequestRepository";
+import { MemoryRepositoryLive } from "./persistence/Layers/MemoryRepository";
+import { MemoryExtractionLive } from "./memory/Layers/MemoryExtraction";
+import { MemoryReactorLive } from "./memory/Layers/MemoryReactor";
 import { BunPtyAdapterLive } from "./terminal/Layers/BunPTY";
 import { NodePtyAdapterLive } from "./terminal/Layers/NodePTY";
 import { AnalyticsService } from "./telemetry/Services/AnalyticsService";
@@ -142,6 +145,16 @@ export function makeServerRuntimeServicesLayer() {
     Layer.provideMerge(textGenerationLayer),
   );
 
+  const memoryExtractionLayer = MemoryExtractionLive.pipe(
+    Layer.provideMerge(MemoryRepositoryLive),
+    Layer.provideMerge(orchestrationReactorLayer),
+  );
+
+  const memoryReactorLayer = MemoryReactorLive.pipe(
+    Layer.provideMerge(memoryExtractionLayer),
+    Layer.provideMerge(orchestrationReactorLayer),
+  );
+
   return Layer.mergeAll(
     orchestrationReactorLayer,
     gitCoreLayer,
@@ -151,5 +164,8 @@ export function makeServerRuntimeServicesLayer() {
     KeybindingsLive,
     ReviewCommentRepositoryLive,
     ReviewRequestRepositoryLive,
+    MemoryRepositoryLive,
+    memoryExtractionLayer,
+    memoryReactorLayer,
   ).pipe(Layer.provideMerge(NodeServices.layer));
 }

@@ -14,3 +14,4 @@ export * from "./editor";
 export * from "./project";
 export * from "./reviewComment";
 export * from "./reviewRequest";
+export * from "./memory";

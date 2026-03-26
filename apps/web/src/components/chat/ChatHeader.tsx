@@ -1,6 +1,7 @@
 import {
   type EditorId,
   type LinkedJiraTicket,
+  type ProjectId,
   type ProjectScript,
   type ResolvedKeybindingsConfig,
   type ThreadId,
@@ -16,9 +17,11 @@ import ProjectScriptsControl, { type NewProjectScriptInput } from "../ProjectScr
 import { Toggle } from "../ui/toggle";
 import { SidebarTrigger } from "../ui/sidebar";
 import { OpenInPicker } from "./OpenInPicker";
+import { MemoryBadge } from "../MemoryBadge";
 
 interface ChatHeaderProps {
   activeThreadId: ThreadId;
+  activeProjectId: ProjectId | null;
   activeThreadTitle: string;
   activeProjectName: string | undefined;
   isGitRepo: boolean;
@@ -43,6 +46,7 @@ interface ChatHeaderProps {
 
 export const ChatHeader = memo(function ChatHeader({
   activeThreadId,
+  activeProjectId,
   activeThreadTitle,
   activeProjectName,
   isGitRepo,
@@ -108,6 +112,7 @@ export const ChatHeader = memo(function ChatHeader({
           />
         )}
         {activeProjectName && <GitActionsControl gitCwd={gitCwd} activeThreadId={activeThreadId} />}
+        <MemoryBadge threadId={activeThreadId} projectId={activeProjectId} />
         <ReviewActionsControl threadId={activeThreadId} />
         <JiraActionsControl
           threadId={activeThreadId}

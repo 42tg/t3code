@@ -63,6 +63,9 @@ import { ServerConfig } from "./config";
 import { GitCore } from "./git/Services/GitCore.ts";
 import { ReviewCommentRepository } from "./persistence/Services/ReviewCommentRepository.ts";
 import { ReviewRequestRepository } from "./persistence/Services/ReviewRequestRepository.ts";
+import { MemoryRepository } from "./persistence/Services/MemoryRepository.ts";
+import { MemoryExtraction } from "./memory/Services/MemoryExtraction.ts";
+import { MemoryReactor } from "./memory/Services/MemoryReactor.ts";
 import { GitHubCli } from "./git/Services/GitHubCli.ts";
 import { tryHandleProjectFaviconRequest } from "./projectFaviconRoute";
 import {
@@ -284,7 +287,10 @@ export type ServerRuntimeServices =
   | Open
   | AnalyticsService
   | ReviewCommentRepository
-  | ReviewRequestRepository;
+  | ReviewRequestRepository
+  | MemoryRepository
+  | MemoryExtraction
+  | MemoryReactor;
 
 export class ServerLifecycleError extends Schema.TaggedErrorClass<ServerLifecycleError>()(
   "ServerLifecycleError",
@@ -327,6 +333,8 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const gitHubCli = yield* GitHubCli;
   const reviewCommentRepo = yield* ReviewCommentRepository;
   const reviewRequestRepo = yield* ReviewRequestRepository;
+  const memoryRepo = yield* MemoryRepository;
+  const memoryExtraction = yield* MemoryExtraction;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
 
@@ -703,6 +711,11 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   ).pipe(Effect.forkIn(subscriptionsScope));
 
   yield* Scope.provide(orchestrationReactor.start, subscriptionsScope);
+
+  // Start the memory reactor (thread summaries + periodic extraction)
+  const memoryReactorService = yield* MemoryReactor;
+  yield* Scope.provide(memoryReactorService.start, subscriptionsScope);
+
   yield* readiness.markOrchestrationSubscriptionsReady;
 
   let welcomeBootstrapProjectId: ProjectId | undefined;
@@ -1470,6 +1483,53 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           status: body.event === "APPROVE" ? "approved" : "changes_requested",
         });
         return {};
+      }
+
+      // ── Memory methods ──────────────────────────────────────────
+      case WS_METHODS.memoryCreate: {
+        const body = stripRequestTag(request.body);
+        const memory = yield* memoryRepo.create(body);
+        return { memory };
+      }
+
+      case WS_METHODS.memoryUpdate: {
+        const body = stripRequestTag(request.body);
+        yield* memoryRepo.update(body);
+        return {};
+      }
+
+      case WS_METHODS.memoryArchive: {
+        const body = stripRequestTag(request.body);
+        yield* memoryRepo.archive(body);
+        return {};
+      }
+
+      case WS_METHODS.memoryDelete: {
+        const body = stripRequestTag(request.body);
+        yield* memoryRepo.delete(body);
+        return {};
+      }
+
+      case WS_METHODS.memoryList: {
+        const body = stripRequestTag(request.body);
+        return yield* memoryRepo.listByProject(body);
+      }
+
+      case WS_METHODS.memorySearch: {
+        const body = stripRequestTag(request.body);
+        const memories = yield* memoryRepo.search(body);
+        return { memories };
+      }
+
+      case WS_METHODS.memoryGetForThread: {
+        const body = stripRequestTag(request.body);
+        const memories = yield* memoryRepo.getRelevantForThread(body);
+        return { memories };
+      }
+
+      case WS_METHODS.memoryExtract: {
+        const body = stripRequestTag(request.body);
+        return yield* memoryExtraction.extract(body);
       }
 
       default: {

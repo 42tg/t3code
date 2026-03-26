@@ -1,7 +1,7 @@
 import {
   ArrowLeftIcon,
+  BrainIcon,
   ChevronRightIcon,
-  ExternalLinkIcon,
   FolderIcon,
   GitPullRequestIcon,
   PlusIcon,
@@ -89,6 +89,8 @@ import { useThreadSelectionStore } from "../threadSelectionStore";
 import { formatWorktreePathForDisplay, getOrphanedWorktreePathForThread } from "../worktreeCleanup";
 import { isNonEmpty as isNonEmptyString } from "effect/String";
 import { Dialog, DialogPopup } from "./ui/dialog";
+import { Sheet, SheetPopup } from "./ui/sheet";
+import { MemoryPanel } from "./MemoryPanel";
 import NotificationBell from "./NotificationBell";
 import ReviewPrDialog from "./ReviewPrDialog";
 import StandaloneReviewPrDialog from "./StandaloneReviewPrDialog";
@@ -445,6 +447,7 @@ export default function Sidebar() {
   const suppressProjectClickAfterDragRef = useRef(false);
   const [desktopUpdateState, setDesktopUpdateState] = useState<DesktopUpdateState | null>(null);
   const [standaloneReviewOpen, setStandaloneReviewOpen] = useState(false);
+  const [memorySheetOpen, setMemorySheetOpen] = useState(false);
   const [pendingReviewRequest, setPendingReviewRequest] = useState<{
     prUrl: string;
     requestId: string;
@@ -1948,6 +1951,18 @@ export default function Sidebar() {
       <SidebarSeparator />
       <SidebarFooter className="p-2">
         <SidebarMenu>
+          {!isOnSettings && (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                size="sm"
+                className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
+                onClick={() => setMemorySheetOpen(true)}
+              >
+                <BrainIcon className="size-3.5" />
+                <span className="text-xs">Memories</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
           <SidebarMenuItem>
             {isOnSettings ? (
               <SidebarMenuButton
@@ -1971,6 +1986,19 @@ export default function Sidebar() {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
+
+      {/* Memory Sheet */}
+      <Sheet open={memorySheetOpen} onOpenChange={setMemorySheetOpen}>
+        <SheetPopup className="w-[400px]">
+          <MemoryPanel
+            projectId={
+              routeThreadId
+                ? (threads.find((t) => t.id === routeThreadId)?.projectId ?? null)
+                : null
+            }
+          />
+        </SheetPopup>
+      </Sheet>
 
       <Dialog
         open={standaloneReviewOpen}
