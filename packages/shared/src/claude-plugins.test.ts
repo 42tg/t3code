@@ -39,7 +39,7 @@ describe("readEnabledPluginKeys", () => {
       enabledPlugins: { "my-plugin@my-marketplace": true },
     });
 
-    const result = readEnabledPluginKeys({ homeDir, cwd });
+    const result = readEnabledPluginKeys({ homeDir, cwd, managedSettingsPath: null });
     expect(result.get("my-plugin@my-marketplace")).toBe(true);
   });
 
@@ -54,7 +54,7 @@ describe("readEnabledPluginKeys", () => {
       enabledPlugins: { "d@m": true },
     });
 
-    const result = readEnabledPluginKeys({ homeDir, cwd });
+    const result = readEnabledPluginKeys({ homeDir, cwd, managedSettingsPath: null });
     expect([...result.keys()].toSorted()).toEqual(["a@m", "b@m", "c@m", "d@m"]);
   });
 
@@ -66,7 +66,7 @@ describe("readEnabledPluginKeys", () => {
       enabledPlugins: { "plugin@market": false },
     });
 
-    const result = readEnabledPluginKeys({ homeDir, cwd });
+    const result = readEnabledPluginKeys({ homeDir, cwd, managedSettingsPath: null });
     expect(result.get("plugin@market")).toBe(false);
   });
 
@@ -74,12 +74,12 @@ describe("readEnabledPluginKeys", () => {
     fs.mkdirSync(path.join(homeDir, ".claude"), { recursive: true });
     fs.writeFileSync(path.join(homeDir, ".claude", "settings.json"), "{ broken", "utf8");
 
-    const result = readEnabledPluginKeys({ homeDir, cwd });
+    const result = readEnabledPluginKeys({ homeDir, cwd, managedSettingsPath: null });
     expect(result.size).toBe(0);
   });
 
   it("skips missing files gracefully", () => {
-    const result = readEnabledPluginKeys({ homeDir, cwd });
+    const result = readEnabledPluginKeys({ homeDir, cwd, managedSettingsPath: null });
     expect(result.size).toBe(0);
   });
 
@@ -88,9 +88,43 @@ describe("readEnabledPluginKeys", () => {
       enabledPlugins: { "a@m": true, "b@m": "yes", "c@m": 1 },
     });
 
-    const result = readEnabledPluginKeys({ homeDir, cwd });
+    const result = readEnabledPluginKeys({ homeDir, cwd, managedSettingsPath: null });
     expect(result.size).toBe(1);
     expect(result.get("a@m")).toBe(true);
+  });
+
+  it("includes plugins from managed settings (managed wins over user/project/local)", () => {
+    let managedDir: string | undefined;
+    try {
+      managedDir = makeTempDir("claude-plugin-test-managed-");
+      const managedFile = path.join(managedDir, "managed-settings.json");
+      writeJson(managedFile, {
+        enabledPlugins: { "managed-plugin@corp": true, "shared@m": false },
+      });
+
+      writeJson(path.join(homeDir, ".claude", "settings.json"), {
+        enabledPlugins: { "user-plugin@m": true, "shared@m": true },
+      });
+
+      const result = readEnabledPluginKeys({ homeDir, cwd, managedSettingsPath: managedFile });
+
+      // managed overrides user's "shared@m": true → false
+      expect(result.get("shared@m")).toBe(false);
+      expect(result.get("user-plugin@m")).toBe(true);
+      expect(result.get("managed-plugin@corp")).toBe(true);
+    } finally {
+      if (managedDir) fs.rmSync(managedDir, { recursive: true, force: true });
+    }
+  });
+
+  it("works normally when managedSettingsPath is null", () => {
+    writeJson(path.join(homeDir, ".claude", "settings.json"), {
+      enabledPlugins: { "a@m": true },
+    });
+
+    const result = readEnabledPluginKeys({ homeDir, cwd, managedSettingsPath: null });
+    expect(result.get("a@m")).toBe(true);
+    expect(result.size).toBe(1);
   });
 });
 
@@ -116,7 +150,7 @@ describe("resolveEnabledPlugins", () => {
     });
     const versionDir = mkPluginVersion(cacheRoot, "my-market", "my-plugin", "1.0.0");
 
-    const result = resolveEnabledPlugins({ homeDir, cwd });
+    const result = resolveEnabledPlugins({ homeDir, cwd, managedSettingsPath: null });
     expect(result).toEqual([
       { pluginId: "my-plugin", marketplaceId: "my-market", path: fs.realpathSync(versionDir) },
     ]);
@@ -130,7 +164,7 @@ describe("resolveEnabledPlugins", () => {
     fs.writeFileSync(path.join(oldDir, ".orphaned_at"), "2025-01-01T00:00:00Z", "utf8");
     const newDir = mkPluginVersion(cacheRoot, "market", "plugin", "2.0.0");
 
-    const result = resolveEnabledPlugins({ homeDir, cwd });
+    const result = resolveEnabledPlugins({ homeDir, cwd, managedSettingsPath: null });
     expect(result).toHaveLength(1);
     expect(result[0]!.path).toBe(fs.realpathSync(newDir));
   });
@@ -142,7 +176,7 @@ describe("resolveEnabledPlugins", () => {
     const dir = mkPluginVersion(cacheRoot, "market", "plugin", "1.0.0");
     fs.writeFileSync(path.join(dir, ".orphaned_at"), "2025-01-01T00:00:00Z", "utf8");
 
-    const result = resolveEnabledPlugins({ homeDir, cwd });
+    const result = resolveEnabledPlugins({ homeDir, cwd, managedSettingsPath: null });
     expect(result).toEqual([]);
   });
 
@@ -152,7 +186,7 @@ describe("resolveEnabledPlugins", () => {
     });
     mkPluginVersion(cacheRoot, "market", "plugin", "1.0.0");
 
-    const result = resolveEnabledPlugins({ homeDir, cwd });
+    const result = resolveEnabledPlugins({ homeDir, cwd, managedSettingsPath: null });
     expect(result).toEqual([]);
   });
 
@@ -161,7 +195,7 @@ describe("resolveEnabledPlugins", () => {
       enabledPlugins: { "no-at-sign": true, "@leading": true, "trailing@": true },
     });
 
-    const result = resolveEnabledPlugins({ homeDir, cwd });
+    const result = resolveEnabledPlugins({ homeDir, cwd, managedSettingsPath: null });
     expect(result).toEqual([]);
   });
 
@@ -170,7 +204,7 @@ describe("resolveEnabledPlugins", () => {
       enabledPlugins: { "missing@market": true },
     });
 
-    const result = resolveEnabledPlugins({ homeDir, cwd });
+    const result = resolveEnabledPlugins({ homeDir, cwd, managedSettingsPath: null });
     expect(result).toEqual([]);
   });
 
@@ -184,8 +218,8 @@ describe("resolveEnabledPlugins", () => {
     mkPluginVersion(cacheRoot, "market", "user-plugin", "1.0.0");
     mkPluginVersion(cacheRoot, "market", "project-plugin", "1.0.0");
 
-    const result = resolveEnabledPlugins({ homeDir, cwd });
-    const ids = result.map((p) => p.pluginId).sort();
+    const result = resolveEnabledPlugins({ homeDir, cwd, managedSettingsPath: null });
+    const ids = result.map((p) => p.pluginId).toSorted();
     expect(ids).toEqual(["project-plugin", "user-plugin"]);
   });
 });
