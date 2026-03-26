@@ -441,13 +441,14 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
             return session;
           }
 
-          return {
-            ...session,
-            ...(session.resumeCursor === undefined && binding.resumeCursor !== undefined
-              ? { resumeCursor: binding.resumeCursor }
-              : {}),
-            ...(binding.runtimeMode !== undefined ? { runtimeMode: binding.runtimeMode } : {}),
-          };
+          const patch: Record<string, unknown> = {};
+          if (session.resumeCursor === undefined && binding.resumeCursor !== undefined) {
+            patch.resumeCursor = binding.resumeCursor;
+          }
+          if (binding.runtimeMode !== undefined) {
+            patch.runtimeMode = binding.runtimeMode;
+          }
+          return Object.keys(patch).length > 0 ? Object.assign({}, session, patch) : session;
         });
       });
 

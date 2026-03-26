@@ -152,7 +152,7 @@ export function CreateJiraTicketDialog({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate content.");
     }
-  }, [projectKey, generateMutation]);
+  }, [projectKey, threadId, generateMutation]);
 
   return (
     <>

@@ -1,7 +1,6 @@
 import {
   ArrowLeftIcon,
   ChevronRightIcon,
-  ExternalLinkIcon,
   FolderIcon,
   GitPullRequestIcon,
   PlusIcon,
@@ -516,11 +515,9 @@ export default function Sidebar() {
 
   const projectCwds = useMemo(() => projects.map((p) => p.cwd), [projects]);
   const projectGitStatusQueries = useQueries({
-    queries: projectCwds.map((cwd) => ({
-      ...gitStatusQueryOptions(cwd),
-      staleTime: 60_000,
-      refetchInterval: 120_000,
-    })),
+    queries: projectCwds.map((cwd) =>
+      Object.assign(gitStatusQueryOptions(cwd), { staleTime: 60_000, refetchInterval: 120_000 }),
+    ),
   });
   const githubUrlByProjectId = useMemo(() => {
     const map = new Map<ProjectId, string>();

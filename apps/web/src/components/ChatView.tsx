@@ -64,7 +64,6 @@ import { isScrollContainerNearBottom } from "../chat-scroll";
 import {
   buildPendingUserInputAnswers,
   derivePendingUserInputProgress,
-  resolvePendingUserInputAnswer,
   setPendingUserInputCustomAnswer,
   type PendingUserInputDraftAnswer,
 } from "../pendingUserInput";
@@ -548,9 +547,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
       return Object.keys(codexOptions).length > 0 ? { codex: codexOptions } : undefined;
     }
     if (selectedProvider === "claudeCode") {
-      const claudeOptions = {
-        ...(selectedClaudeLargeContextEnabled ? { largeContext: true } : {}),
-      };
+      const claudeOptions = selectedClaudeLargeContextEnabled ? { largeContext: true } : {};
       return Object.keys(claudeOptions).length > 0 ? { claudeCode: claudeOptions } : undefined;
     }
     return undefined;

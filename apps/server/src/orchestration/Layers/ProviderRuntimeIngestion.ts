@@ -75,6 +75,23 @@ function truncateDetail(value: string, limit = 180): string {
 
 const MAX_ARGS_SIZE = 50_000;
 
+function truncateStrings(obj: Record<string, unknown>) {
+  for (const key of Object.keys(obj)) {
+    const val = obj[key];
+    if (typeof val === "string" && val.length > 10_000) {
+      obj[key] = val.slice(0, 10_000) + "\n... (truncated)";
+    } else if (val != null && typeof val === "object" && !Array.isArray(val)) {
+      truncateStrings(val as Record<string, unknown>);
+    } else if (Array.isArray(val)) {
+      for (const item of val) {
+        if (item != null && typeof item === "object") {
+          truncateStrings(item as Record<string, unknown>);
+        }
+      }
+    }
+  }
+}
+
 /**
  * Truncate large string fields in approval `args` to prevent unbounded
  * payloads flowing through the activity pipeline and to the web client.
@@ -85,22 +102,6 @@ function truncateArgs(args: unknown): unknown {
   if (serialized.length <= MAX_ARGS_SIZE) return args;
   // Deep-clone and truncate large string values
   const clone = JSON.parse(serialized) as Record<string, unknown>;
-  const truncateStrings = (obj: Record<string, unknown>) => {
-    for (const key of Object.keys(obj)) {
-      const val = obj[key];
-      if (typeof val === "string" && val.length > 10_000) {
-        obj[key] = val.slice(0, 10_000) + "\n... (truncated)";
-      } else if (val != null && typeof val === "object" && !Array.isArray(val)) {
-        truncateStrings(val as Record<string, unknown>);
-      } else if (Array.isArray(val)) {
-        for (const item of val) {
-          if (item != null && typeof item === "object") {
-            truncateStrings(item as Record<string, unknown>);
-          }
-        }
-      }
-    }
-  };
   truncateStrings(clone);
   return clone;
 }

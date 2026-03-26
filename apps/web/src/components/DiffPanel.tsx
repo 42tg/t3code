@@ -167,7 +167,10 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
   const prUrl = useQuery(gitStatusQueryOptions(activeCwd ?? null)).data?.pr?.url ?? null;
   // NOTE: publishContext depends on branchDiffFiles below — annotations
   // are computed after both are available.
-  const publishContextBase = activeCwd && prUrl ? { cwd: activeCwd, prUrl } : undefined;
+  const publishContextBase = useMemo(
+    () => (activeCwd && prUrl ? { cwd: activeCwd, prUrl } : undefined),
+    [activeCwd, prUrl],
+  );
 
   const gitBranchesQuery = useQuery(gitBranchesQueryOptions(activeCwd ?? null));
   const isGitRepo = gitBranchesQuery.data?.isRepo ?? true;
