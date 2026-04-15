@@ -29,6 +29,23 @@
 --   17 ProjectionThreadsArchivedAt
 --   18 ProjectionThreadsArchivedAtIndex
 --
+-- ASSUMPTIONS
+-- -----------
+-- This script targets the specific Tobias-fork timeline above.
+--
+-- IDs 19-21 on main (ProjectionSnapshotLookupIndexes, ReviewComments,
+-- ReviewRequests) are assumed to have run successfully -- the fork
+-- already created the ReviewComments and ReviewRequests tables at
+-- IDs 16-17, and all three migrations use IF NOT EXISTS guards.
+-- This script creates the ProjectionSnapshotLookupIndexes indexes
+-- (Step G) defensively in case they were missed.
+--
+-- Columns/tables created by the fork's 14-18 migrations that have
+-- no equivalent on main (e.g. jira_ticket columns, pr_meta tables)
+-- are left in place. SQLite ignores unused columns, and they won't
+-- cause issues. If they bother you, drop them manually after
+-- verifying `bun run dev` starts cleanly.
+--
 -- HOW TO USE
 -- ----------
 --   1. Stop your dev server.
@@ -43,9 +60,13 @@
 -- already recorded as applied, so the migrator will not try to re-run
 -- anything. We only fill in the schema deltas main expects.
 --
--- All operations are wrapped in a single transaction. Re-running the
--- script after a partial failure is not supported -- restore the backup
--- and try again.
+-- WARNING: NOT IDEMPOTENT
+-- -----------------------
+-- ALTER TABLE ADD COLUMN will fail if the column already exists, and
+-- SQLite has no IF NOT EXISTS guard for ADD COLUMN. If this script
+-- fails partway through, the transaction rolls back automatically.
+-- Restore from your backup (step 2) and re-run.
+-- Do NOT attempt to run this script a second time on the same DB.
 -- ============================================================
 
 BEGIN TRANSACTION;
@@ -245,5 +266,16 @@ ALTER TABLE projection_threads ADD COLUMN archived_at TEXT;
 -- ============================================================
 CREATE INDEX IF NOT EXISTS idx_projection_threads_project_archived_at
   ON projection_threads(project_id, archived_at);
+
+-- ============================================================
+-- STEP G: Migration 19 -- ProjectionSnapshotLookupIndexes
+-- ============================================================
+-- These may already exist if main's migration 19 ran successfully.
+-- IF NOT EXISTS makes this safe to include unconditionally.
+CREATE INDEX IF NOT EXISTS idx_projection_projects_workspace_root_deleted_at
+  ON projection_projects(workspace_root, deleted_at);
+
+CREATE INDEX IF NOT EXISTS idx_projection_threads_project_deleted_created
+  ON projection_threads(project_id, deleted_at, created_at);
 
 COMMIT;
