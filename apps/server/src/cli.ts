@@ -15,6 +15,7 @@ import {
 import { readBootstrapEnvelope } from "./bootstrap";
 import { expandHomePath, resolveBaseDir } from "./os-jank";
 import { runServer } from "./server";
+import type { JevTurnRouterConfig, JevTurnRouterMode } from "./jevTurnRouter";
 
 const PortSchema = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 }));
 
@@ -130,6 +131,30 @@ const EnvServerConfig = Config.all({
     Config.map(Option.getOrUndefined),
   ),
   logWebSocketEvents: Config.boolean("T3CODE_LOG_WS_EVENTS").pipe(
+    Config.option,
+    Config.map(Option.getOrUndefined),
+  ),
+  jevApiKey: Config.string("T3CODE_JEV_API_KEY").pipe(
+    Config.option,
+    Config.map(Option.getOrUndefined),
+  ),
+  jevMode: Config.string("T3CODE_JEV_MODE").pipe(Config.withDefault("off")),
+  jevApiUrl: Config.string("T3CODE_JEV_API_URL").pipe(
+    Config.withDefault("https://api.typesafe.ai/v1/systemone"),
+  ),
+  jevTimeoutMs: Config.int("T3CODE_JEV_TIMEOUT_MS").pipe(Config.withDefault(1500)),
+  jevConfidenceThreshold: Config.number("T3CODE_JEV_CONFIDENCE_THRESHOLD").pipe(
+    Config.withDefault(0.8),
+  ),
+  jevModelSmall: Config.string("T3CODE_JEV_MODEL_SMALL").pipe(
+    Config.option,
+    Config.map(Option.getOrUndefined),
+  ),
+  jevModelNormal: Config.string("T3CODE_JEV_MODEL_NORMAL").pipe(
+    Config.option,
+    Config.map(Option.getOrUndefined),
+  ),
+  jevModelExpert: Config.string("T3CODE_JEV_MODEL_EXPERT").pipe(
     Config.option,
     Config.map(Option.getOrUndefined),
   ),
@@ -291,6 +316,20 @@ export const resolveServerConfig = (
       () => (mode === "desktop" ? "127.0.0.1" : undefined),
     );
     const logLevel = Option.getOrElse(cliLogLevel, () => env.logLevel);
+    const jevMode: JevTurnRouterMode =
+      env.jevMode === "shadow" || env.jevMode === "apply" ? env.jevMode : "off";
+    const jevTurnRouter: JevTurnRouterConfig = {
+      mode: jevMode,
+      ...(env.jevApiKey ? { apiKey: env.jevApiKey } : {}),
+      apiUrl: env.jevApiUrl,
+      timeoutMs: Math.max(100, env.jevTimeoutMs),
+      confidenceThreshold: Math.min(1, Math.max(0, env.jevConfidenceThreshold)),
+      models: {
+        ...(env.jevModelSmall ? { small: env.jevModelSmall } : {}),
+        ...(env.jevModelNormal ? { normal: env.jevModelNormal } : {}),
+        ...(env.jevModelExpert ? { expert: env.jevModelExpert } : {}),
+      },
+    };
 
     const config: ServerConfigShape = {
       logLevel,
@@ -330,6 +369,7 @@ export const resolveServerConfig = (
       authToken,
       autoBootstrapProjectFromCwd,
       logWebSocketEvents,
+      jevTurnRouter,
     };
 
     return config;

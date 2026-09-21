@@ -8,6 +8,8 @@
  */
 import { Effect, FileSystem, Layer, LogLevel, Path, Schema, ServiceMap } from "effect";
 
+import type { JevTurnRouterConfig } from "./jevTurnRouter";
+
 export const DEFAULT_PORT = 3773;
 
 export const RuntimeMode = Schema.Literals(["web", "desktop"]);
@@ -57,6 +59,7 @@ export interface ServerConfigShape extends ServerDerivedPaths {
   readonly authToken: string | undefined;
   readonly autoBootstrapProjectFromCwd: boolean;
   readonly logWebSocketEvents: boolean;
+  readonly jevTurnRouter?: JevTurnRouterConfig;
 }
 
 export const deriveServerPaths = Effect.fn(function* (

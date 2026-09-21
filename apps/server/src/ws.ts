@@ -53,6 +53,7 @@ import { ProjectSetupScriptRunner } from "./project/Services/ProjectSetupScriptR
 import { ReviewCommentRepository } from "./persistence/Services/ReviewCommentRepository";
 import { ReviewRequestRepository } from "./persistence/Services/ReviewRequestRepository";
 import { GitHubCli } from "./git/Services/GitHubCli";
+import { routeTurnWithJev, type JevTurnRouteResult } from "./jevTurnRouter";
 
 const WsRpcLayer = WsRpcGroup.toLayer(
   Effect.gen(function* () {
@@ -98,6 +99,33 @@ const WsRpcLayer = WsRpcGroup.toLayer(
           createdAt: input.createdAt,
         },
         createdAt: input.createdAt,
+      });
+
+    const appendJevRoutingActivity = (
+      command: Extract<OrchestrationCommand, { type: "thread.turn.start" }>,
+      recommendation: JevTurnRouteResult["recommendation"],
+    ) =>
+      orchestrationEngine.dispatch({
+        type: "thread.activity.append",
+        commandId: serverCommandId("jev-routing-activity"),
+        threadId: command.threadId,
+        activity: {
+          id: EventId.makeUnsafe(crypto.randomUUID()),
+          tone: recommendation.status === "fallback" ? "error" : "info",
+          kind: "jev.turn-routing",
+          summary:
+            recommendation.status === "applied"
+              ? `Jev selected ${recommendation.recommendedModel ?? recommendation.tier ?? "a model"}`
+              : recommendation.status === "recommended"
+                ? `Jev recommends ${recommendation.recommendedModel ?? recommendation.tier ?? "a model"}`
+                : recommendation.status === "fallback"
+                  ? `Jev fallback: ${recommendation.reason ?? "unknown reason"}`
+                  : "Jev routing disabled",
+          payload: recommendation,
+          turnId: null,
+          createdAt: command.createdAt,
+        },
+        createdAt: command.createdAt,
       });
 
     const toDispatchCommandError = (cause: unknown, fallbackMessage: string) =>
@@ -310,26 +338,40 @@ const WsRpcLayer = WsRpcGroup.toLayer(
 
     const dispatchNormalizedCommand = (
       normalizedCommand: OrchestrationCommand,
-    ): Effect.Effect<{ readonly sequence: number }, OrchestrationDispatchCommandError> => {
-      const dispatchEffect =
-        normalizedCommand.type === "thread.turn.start" && normalizedCommand.bootstrap
-          ? dispatchBootstrapTurnStart(normalizedCommand)
-          : orchestrationEngine
-              .dispatch(normalizedCommand)
-              .pipe(
-                Effect.mapError((cause) =>
-                  toDispatchCommandError(cause, "Failed to dispatch orchestration command"),
-                ),
-              );
+    ): Effect.Effect<{ readonly sequence: number }, OrchestrationDispatchCommandError> =>
+      Effect.gen(function* () {
+        const routing =
+          normalizedCommand.type === "thread.turn.start" && config.jevTurnRouter
+            ? yield* Effect.promise(() =>
+                routeTurnWithJev(normalizedCommand, config.jevTurnRouter!),
+              )
+            : null;
+        const command = routing?.command ?? normalizedCommand;
+        const dispatchEffect =
+          command.type === "thread.turn.start" && command.bootstrap
+            ? dispatchBootstrapTurnStart(command)
+            : orchestrationEngine
+                .dispatch(command)
+                .pipe(
+                  Effect.mapError((cause) =>
+                    toDispatchCommandError(cause, "Failed to dispatch orchestration command"),
+                  ),
+                );
 
-      return startup
-        .enqueueCommand(dispatchEffect)
-        .pipe(
-          Effect.mapError((cause) =>
-            toDispatchCommandError(cause, "Failed to dispatch orchestration command"),
-          ),
-        );
-    };
+        const result = yield* startup
+          .enqueueCommand(dispatchEffect)
+          .pipe(
+            Effect.mapError((cause) =>
+              toDispatchCommandError(cause, "Failed to dispatch orchestration command"),
+            ),
+          );
+        if (routing && routing.recommendation.status !== "disabled") {
+          yield* appendJevRoutingActivity(routing.command, routing.recommendation).pipe(
+            Effect.ignoreCause({ log: true }),
+          );
+        }
+        return result;
+      });
     const reviewCommentRepo = yield* ReviewCommentRepository;
     const reviewRequestRepo = yield* ReviewRequestRepository;
     const gitHubCli = yield* GitHubCli;
